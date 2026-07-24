@@ -900,6 +900,7 @@ func (s *Server) registerManagementRoutes() {
 	mgmt.Use(s.managementAvailabilityMiddleware(), s.mgmt.Middleware())
 	{
 		mgmt.POST("/auth/logout", s.mgmt.Logout)
+		mgmt.GET("/models", s.mgmt.GetModels)
 		mgmt.GET("/config", s.mgmt.GetConfig)
 		mgmt.GET("/config.yaml", s.mgmt.GetConfigYAML)
 		mgmt.PUT("/config.yaml", s.mgmt.PutConfigYAML)

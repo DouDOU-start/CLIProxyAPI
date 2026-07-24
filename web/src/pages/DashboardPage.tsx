@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  IconKey,
-  IconFileText,
-  IconSatellite,
-} from '@/components/ui/icons';
+import { IconKey, IconFileText, IconSatellite } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
-import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
 import { formatDateValue } from '@/utils/format';
 import { getDashboardModelsStatValue } from '@/utils/dashboard';
 import styles from './DashboardPage.module.scss';
@@ -62,21 +57,17 @@ export function DashboardPage() {
     return () => clearInterval(id);
   }, []);
 
-  const resolveApiKeysForModels = useApiKeysForModels();
-
   const fetchModels = useCallback(async () => {
     if (connectionStatus !== 'connected' || !apiBase) {
       return;
     }
 
     try {
-      const apiKeys = await resolveApiKeysForModels();
-      const primaryKey = apiKeys[0];
-      await fetchModelsFromStore(apiBase, primaryKey);
+      await fetchModelsFromStore(apiBase);
     } catch {
       // Ignore model fetch errors on dashboard
     }
-  }, [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]);
+  }, [connectionStatus, apiBase, fetchModelsFromStore]);
 
   useEffect(() => {
     if (connectionStatus !== 'connected') {

@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
 import type { AuthFileItem } from '@/types';
-import { resolveAuthProvider } from '@/utils/quota';
 import {
   normalizeRecentRequestAuthIndex,
   normalizeRecentRequestBuckets,
@@ -21,7 +20,6 @@ import {
 } from '@/utils/recentRequests';
 import { formatFileSize } from '@/utils/format';
 import {
-  QUOTA_PROVIDER_TYPES,
   formatModified,
   getAuthFileIcon,
   getAuthFileStatusMessage,
@@ -30,9 +28,9 @@ import {
   isRuntimeOnlyAuthFile,
   normalizeProviderKey,
   parsePriorityValue,
-  type QuotaProviderType,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
+import { resolveAuthFileQuotaType } from '@/features/authFiles/quotaVisibility';
 import type { AuthFileStatusBarData } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQuotaSection';
 import styles from '@/pages/AuthFilesPage.module.scss';
@@ -47,7 +45,6 @@ export type AuthFileCardProps = {
   disableControls: boolean;
   deleting: string | null;
   statusUpdating: Record<string, boolean>;
-  quotaFilterType: QuotaProviderType | null;
   statusBarCache: Map<string, AuthFileStatusBarData>;
   onShowModels: (file: AuthFileItem) => void;
   onDownload: (name: string) => void;
@@ -55,12 +52,6 @@ export type AuthFileCardProps = {
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
-};
-
-const resolveQuotaType = (file: AuthFileItem): QuotaProviderType | null => {
-  const provider = resolveAuthProvider(file);
-  if (!QUOTA_PROVIDER_TYPES.has(provider as QuotaProviderType)) return null;
-  return provider as QuotaProviderType;
 };
 
 export function AuthFileCard(props: AuthFileCardProps) {
@@ -73,7 +64,6 @@ export function AuthFileCard(props: AuthFileCardProps) {
     disableControls,
     deleting,
     statusUpdating,
-    quotaFilterType,
     statusBarCache,
     onShowModels,
     onDownload,
@@ -96,10 +86,9 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const typeLabel = getTypeLabel(t, providerKey);
   const providerIcon = getAuthFileIcon(providerKey, resolvedTheme);
 
-  const quotaType =
-    quotaFilterType && resolveQuotaType(file) === quotaFilterType ? quotaFilterType : null;
+  const quotaType = resolveAuthFileQuotaType(file);
 
-  const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly && !compact;
+  const showQuotaLayout = Boolean(quotaType) && !isRuntimeOnly;
 
   const providerCardClass =
     quotaType === 'antigravity'

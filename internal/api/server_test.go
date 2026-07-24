@@ -434,6 +434,49 @@ func addManagementSession(req *http.Request, cookie *http.Cookie, csrfToken stri
 	req.Header.Set("X-CSRF-Token", csrfToken)
 }
 
+func TestManagementModelsUsesSessionDuringExampleAPIKeySafeMode(t *testing.T) {
+	configureManagementAuth(t)
+	server := newTestServerWithOptions(t, WithExampleAPIKeySafeMode())
+	server.cfg.APIKeys = []string{"your-api-key-1"}
+	server.exampleAPIKeySafeModeActive.Store(server.exampleAPIKeySafeModeRequired(server.cfg))
+
+	unauthenticatedReq := httptest.NewRequest(http.MethodGet, "/v0/management/models", nil)
+	unauthenticatedReq.RemoteAddr = "127.0.0.1:12345"
+	unauthenticatedRec := httptest.NewRecorder()
+	server.engine.ServeHTTP(unauthenticatedRec, unauthenticatedReq)
+	if unauthenticatedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated management models status = %d, want %d body=%s", unauthenticatedRec.Code, http.StatusUnauthorized, unauthenticatedRec.Body.String())
+	}
+
+	proxyReq := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	proxyReq.Header.Set("Authorization", "Bearer your-api-key-1")
+	proxyRec := httptest.NewRecorder()
+	server.engine.ServeHTTP(proxyRec, proxyReq)
+	if proxyRec.Code != http.StatusForbidden {
+		t.Fatalf("proxy models safe mode status = %d, want %d body=%s", proxyRec.Code, http.StatusForbidden, proxyRec.Body.String())
+	}
+
+	cookie, csrfToken := managementSessionForTest(t, server)
+	modelsReq := httptest.NewRequest(http.MethodGet, "/v0/management/models", nil)
+	addManagementSession(modelsReq, cookie, csrfToken)
+	modelsRec := httptest.NewRecorder()
+	server.engine.ServeHTTP(modelsRec, modelsReq)
+	if modelsRec.Code != http.StatusOK {
+		t.Fatalf("authenticated management models status = %d, want %d body=%s", modelsRec.Code, http.StatusOK, modelsRec.Body.String())
+	}
+
+	var response struct {
+		Object string           `json:"object"`
+		Data   []map[string]any `json:"data"`
+	}
+	if errUnmarshal := json.Unmarshal(modelsRec.Body.Bytes(), &response); errUnmarshal != nil {
+		t.Fatalf("unmarshal management models response: %v", errUnmarshal)
+	}
+	if response.Object != "list" || response.Data == nil {
+		t.Fatalf("unexpected management models response: %#v", response)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	server := newTestServer(t)
 

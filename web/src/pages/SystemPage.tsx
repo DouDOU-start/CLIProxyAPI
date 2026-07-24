@@ -13,7 +13,6 @@ import {
   useThemeStore,
 } from '@/stores';
 import { configApi, versionApi } from '@/services/api';
-import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
 import { formatDateTimeValue } from '@/utils/format';
 import { classifyModels } from '@/utils/models';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
@@ -119,8 +118,6 @@ export function SystemPage() {
     return resolvedTheme === 'dark' ? iconEntry.dark : iconEntry.light;
   };
 
-  const resolveApiKeysForModels = useApiKeysForModels();
-
   const fetchModels = async ({ forceRefresh = false }: { forceRefresh?: boolean } = {}) => {
     if (auth.connectionStatus !== 'connected') {
       setModelStatus({
@@ -137,9 +134,7 @@ export function SystemPage() {
 
     setModelStatus({ type: 'muted', message: t('system_info.models_loading') });
     try {
-      const apiKeys = await resolveApiKeysForModels({ force: forceRefresh });
-      const primaryKey = apiKeys[0];
-      const list = await fetchModelsFromStore(auth.apiBase, primaryKey, forceRefresh);
+      const list = await fetchModelsFromStore(auth.apiBase, forceRefresh);
       const hasModels = list.length > 0;
       setModelStatus({
         type: hasModels ? 'success' : 'warning',
@@ -418,10 +413,9 @@ export function SystemPage() {
           {modelStatus && (
             <div className={`status-badge ${modelStatus.type}`}>{modelStatus.message}</div>
           )}
-          {modelsError && <div className="error-box">{modelsError}</div>}
           {modelsLoading ? (
             <div className="hint">{t('common.loading')}</div>
-          ) : models.length === 0 ? (
+          ) : modelsError ? null : models.length === 0 ? (
             <div className="hint">{t('system_info.models_empty')}</div>
           ) : (
             <div className="item-list">
