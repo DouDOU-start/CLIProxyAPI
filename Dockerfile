@@ -1,3 +1,15 @@
+FROM oven/bun:1.3.14 AS web-builder
+
+WORKDIR /app/web
+
+COPY web/package.json web/bun.lock ./
+
+RUN bun install --frozen-lockfile
+
+COPY web/ ./
+
+RUN bun run build
+
 FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
@@ -9,6 +21,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+
+COPY --from=web-builder /app/web/dist/index.html ./web/dist/index.html
 
 ARG VERSION=dev
 ARG COMMIT=none

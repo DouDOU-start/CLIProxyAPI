@@ -324,29 +324,21 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 		changes = append(changes, entries...)
 	}
 
-	// Remote management (never print the key)
+	// Remote management credentials are always redacted.
 	if oldCfg.RemoteManagement.AllowRemote != newCfg.RemoteManagement.AllowRemote {
 		changes = append(changes, fmt.Sprintf("remote-management.allow-remote: %t -> %t", oldCfg.RemoteManagement.AllowRemote, newCfg.RemoteManagement.AllowRemote))
 	}
-	if oldCfg.RemoteManagement.DisableControlPanel != newCfg.RemoteManagement.DisableControlPanel {
-		changes = append(changes, fmt.Sprintf("remote-management.disable-control-panel: %t -> %t", oldCfg.RemoteManagement.DisableControlPanel, newCfg.RemoteManagement.DisableControlPanel))
+	if oldCfg.RemoteManagement.Email != newCfg.RemoteManagement.Email {
+		changes = append(changes, "remote-management.email: updated (redacted)")
 	}
-	if oldCfg.RemoteManagement.DisableAutoUpdatePanel != newCfg.RemoteManagement.DisableAutoUpdatePanel {
-		changes = append(changes, fmt.Sprintf("remote-management.disable-auto-update-panel: %t -> %t", oldCfg.RemoteManagement.DisableAutoUpdatePanel, newCfg.RemoteManagement.DisableAutoUpdatePanel))
-	}
-	oldPanelRepo := strings.TrimSpace(oldCfg.RemoteManagement.PanelGitHubRepository)
-	newPanelRepo := strings.TrimSpace(newCfg.RemoteManagement.PanelGitHubRepository)
-	if oldPanelRepo != newPanelRepo {
-		changes = append(changes, fmt.Sprintf("remote-management.panel-github-repository: %s -> %s", oldPanelRepo, newPanelRepo))
-	}
-	if oldCfg.RemoteManagement.SecretKey != newCfg.RemoteManagement.SecretKey {
+	if oldCfg.RemoteManagement.Password != newCfg.RemoteManagement.Password {
 		switch {
-		case oldCfg.RemoteManagement.SecretKey == "" && newCfg.RemoteManagement.SecretKey != "":
-			changes = append(changes, "remote-management.secret-key: created")
-		case oldCfg.RemoteManagement.SecretKey != "" && newCfg.RemoteManagement.SecretKey == "":
-			changes = append(changes, "remote-management.secret-key: deleted")
+		case oldCfg.RemoteManagement.Password == "" && newCfg.RemoteManagement.Password != "":
+			changes = append(changes, "remote-management.password: created")
+		case oldCfg.RemoteManagement.Password != "" && newCfg.RemoteManagement.Password == "":
+			changes = append(changes, "remote-management.password: deleted")
 		default:
-			changes = append(changes, "remote-management.secret-key: updated")
+			changes = append(changes, "remote-management.password: updated")
 		}
 	}
 

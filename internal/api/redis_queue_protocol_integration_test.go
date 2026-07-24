@@ -221,13 +221,14 @@ func readTestRESPPubSubMessage(r *bufio.Reader) (string, []byte, error) {
 	return string(items[1]), items[2], nil
 }
 
-func TestRedisProtocol_ManagementDisabled_RejectsConnection(t *testing.T) {
+func TestRedisProtocolUnconfiguredManagementRejectsAuthentication(t *testing.T) {
+	t.Setenv("MANAGEMENT_EMAIL", "")
 	t.Setenv("MANAGEMENT_PASSWORD", "")
 	redisqueue.SetEnabled(false)
 
 	server := newTestServer(t)
-	if server.managementRoutesEnabled.Load() {
-		t.Fatalf("expected managementRoutesEnabled to be false")
+	if !server.managementRoutesEnabled.Load() {
+		t.Fatal("expected integrated management routes to be enabled")
 	}
 
 	addr, stop := startRedisMuxListener(t, server)
@@ -240,21 +241,21 @@ func TestRedisProtocol_ManagementDisabled_RejectsConnection(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	if errWrite := writeTestRESPCommand(conn, "PING"); errWrite != nil {
-		t.Fatalf("failed to write RESP command: %v", errWrite)
+	if errWrite := writeTestRESPCommand(conn, "AUTH", "admin@example.com", "test-management-password"); errWrite != nil {
+		t.Fatalf("failed to write AUTH command: %v", errWrite)
 	}
 
-	buf := make([]byte, 1)
-	_, errRead := conn.Read(buf)
-	if errRead == nil {
-		t.Fatalf("expected connection to be closed when management is disabled")
+	message, errRead := readTestRESPError(bufio.NewReader(conn))
+	if errRead != nil {
+		t.Fatalf("failed to read AUTH error: %v", errRead)
 	}
-	if ne, ok := errRead.(net.Error); ok && ne.Timeout() {
-		t.Fatalf("expected connection to be closed when management is disabled, got timeout: %v", errRead)
+	if message != "ERR management email and password are not configured" {
+		t.Fatalf("unexpected AUTH error: %q", message)
 	}
 }
 
 func TestRedisProtocol_HomeEnabled_DisablesConnection(t *testing.T) {
+	t.Setenv("MANAGEMENT_EMAIL", "admin@example.com")
 	t.Setenv("MANAGEMENT_PASSWORD", "test-management-password")
 	redisqueue.SetEnabled(false)
 	t.Cleanup(func() { redisqueue.SetEnabled(false) })
@@ -298,8 +299,10 @@ func TestRedisProtocol_HomeEnabled_DisablesConnection(t *testing.T) {
 }
 
 func TestRedisProtocol_SUBSCRIBE_UsageSendsSupportRefresh(t *testing.T) {
+	const managementEmail = "admin@example.com"
 	const managementPassword = "test-management-password"
 
+	t.Setenv("MANAGEMENT_EMAIL", managementEmail)
 	t.Setenv("MANAGEMENT_PASSWORD", managementPassword)
 	redisqueue.SetEnabled(false)
 	t.Cleanup(func() { redisqueue.SetEnabled(false) })
@@ -321,7 +324,7 @@ func TestRedisProtocol_SUBSCRIBE_UsageSendsSupportRefresh(t *testing.T) {
 	reader := bufio.NewReader(conn)
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
-	if errWrite := writeTestRESPCommand(conn, "AUTH", managementPassword); errWrite != nil {
+	if errWrite := writeTestRESPCommand(conn, "AUTH", managementEmail, managementPassword); errWrite != nil {
 		t.Fatalf("failed to write AUTH command: %v", errWrite)
 	}
 	if msg, errRead := readTestRESPSimpleString(reader); errRead != nil {
@@ -360,8 +363,10 @@ func TestRedisProtocol_SUBSCRIBE_UsageSendsSupportRefresh(t *testing.T) {
 }
 
 func TestRedisProtocol_SUBSCRIBE_ErrorsReceivesErrorEvents(t *testing.T) {
+	const managementEmail = "admin@example.com"
 	const managementPassword = "test-management-password"
 
+	t.Setenv("MANAGEMENT_EMAIL", managementEmail)
 	t.Setenv("MANAGEMENT_PASSWORD", managementPassword)
 	redisqueue.SetEnabled(false)
 	t.Cleanup(func() { redisqueue.SetEnabled(false) })
@@ -383,7 +388,7 @@ func TestRedisProtocol_SUBSCRIBE_ErrorsReceivesErrorEvents(t *testing.T) {
 	reader := bufio.NewReader(conn)
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
-	if errWrite := writeTestRESPCommand(conn, "AUTH", managementPassword); errWrite != nil {
+	if errWrite := writeTestRESPCommand(conn, "AUTH", managementEmail, managementPassword); errWrite != nil {
 		t.Fatalf("failed to write AUTH command: %v", errWrite)
 	}
 	if msg, errRead := readTestRESPSimpleString(reader); errRead != nil {
@@ -414,8 +419,10 @@ func TestRedisProtocol_SUBSCRIBE_ErrorsReceivesErrorEvents(t *testing.T) {
 }
 
 func TestRedisProtocol_AUTH_And_PopContracts(t *testing.T) {
+	const managementEmail = "admin@example.com"
 	const managementPassword = "test-management-password"
 
+	t.Setenv("MANAGEMENT_EMAIL", managementEmail)
 	t.Setenv("MANAGEMENT_PASSWORD", managementPassword)
 	redisqueue.SetEnabled(false)
 	t.Cleanup(func() { redisqueue.SetEnabled(false) })
@@ -438,7 +445,7 @@ func TestRedisProtocol_AUTH_And_PopContracts(t *testing.T) {
 
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
-	if errWrite := writeTestRESPCommand(conn, "AUTH", managementPassword); errWrite != nil {
+	if errWrite := writeTestRESPCommand(conn, "AUTH", managementEmail, managementPassword); errWrite != nil {
 		t.Fatalf("failed to write AUTH command: %v", errWrite)
 	}
 	if msg, errRead := readTestRESPSimpleString(reader); errRead != nil {

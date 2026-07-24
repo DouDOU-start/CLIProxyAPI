@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"os"
 	"strings"
 	"syscall"
@@ -16,14 +17,13 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginstore"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	DefaultPanelGitHubRepository = "https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-	DefaultPprofAddr             = "127.0.0.1:8316"
-	DefaultAuthDir               = "~/.cli-proxy-api"
+	DefaultPprofAddr                      = "127.0.0.1:8316"
+	DefaultAuthDir                        = "~/.cli-proxy-api"
+	minimumRemoteManagementPasswordLength = 8
 )
 
 // Config represents the application's configuration, loaded from a YAML file.
@@ -315,16 +315,10 @@ type PprofConfig struct {
 type RemoteManagement struct {
 	// AllowRemote toggles remote (non-localhost) access to management API.
 	AllowRemote bool `yaml:"allow-remote"`
-	// SecretKey is the management key (plaintext or bcrypt hashed). YAML key intentionally 'secret-key'.
-	SecretKey string `yaml:"secret-key"`
-	// DisableControlPanel skips serving and syncing the bundled management UI when true.
-	DisableControlPanel bool `yaml:"disable-control-panel"`
-	// DisableAutoUpdatePanel disables automatic periodic background updates of the management panel asset from GitHub.
-	// When false (the default), the background updater remains enabled; when true, the panel is only downloaded on first access if missing.
-	DisableAutoUpdatePanel bool `yaml:"disable-auto-update-panel"`
-	// PanelGitHubRepository overrides the GitHub repository used to fetch the management panel asset.
-	// Accepts either a repository URL (https://github.com/org/repo) or an API releases endpoint.
-	PanelGitHubRepository string `yaml:"panel-github-repository"`
+	// Email is the account identifier used to sign in to the integrated web console.
+	Email string `yaml:"email"`
+	// Password contains the plaintext password or a legacy bcrypt hash.
+	Password string `yaml:"password"`
 }
 
 // QuotaExceeded defines the behavior when API quota limits are exceeded.
@@ -767,7 +761,6 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	cfg.WebsocketAuth = true
 	cfg.Pprof.Enable = false
 	cfg.Pprof.Addr = DefaultPprofAddr
-	cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
 	cfg.CredentialInFlight = DefaultCredentialInFlightConfig()
 	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		if optional {
@@ -784,23 +777,22 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 		return nil, errValidate
 	}
 
-	// Hash remote management key if plaintext is detected (nested)
-	// We consider a value to be already hashed if it looks like a bcrypt hash ($2a$, $2b$, or $2y$ prefix).
-	if cfg.RemoteManagement.SecretKey != "" && !looksLikeBcrypt(cfg.RemoteManagement.SecretKey) {
-		hashed, errHash := hashSecret(cfg.RemoteManagement.SecretKey)
-		if errHash != nil {
-			return nil, fmt.Errorf("failed to hash remote management key: %w", errHash)
+	cfg.RemoteManagement.Email = strings.ToLower(strings.TrimSpace(cfg.RemoteManagement.Email))
+	cfg.RemoteManagement.Password = strings.TrimSpace(cfg.RemoteManagement.Password)
+	if (cfg.RemoteManagement.Email == "") != (cfg.RemoteManagement.Password == "") {
+		return nil, fmt.Errorf("remote management email and password must be configured together")
+	}
+	if cfg.RemoteManagement.Email != "" {
+		address, errAddress := mail.ParseAddress(cfg.RemoteManagement.Email)
+		if errAddress != nil || !strings.EqualFold(address.Address, cfg.RemoteManagement.Email) {
+			return nil, fmt.Errorf("remote management email is invalid")
 		}
-		cfg.RemoteManagement.SecretKey = hashed
-
-		// Persist the hashed value back to the config file to avoid re-hashing on next startup.
-		// Preserve YAML comments and ordering; update only the nested key.
-		_ = SaveConfigPreserveCommentsUpdateNestedScalar(configFile, []string{"remote-management", "secret-key"}, hashed)
 	}
 
-	cfg.RemoteManagement.PanelGitHubRepository = strings.TrimSpace(cfg.RemoteManagement.PanelGitHubRepository)
-	if cfg.RemoteManagement.PanelGitHubRepository == "" {
-		cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
+	if cfg.RemoteManagement.Password != "" && !looksLikeBcrypt(cfg.RemoteManagement.Password) {
+		if len(cfg.RemoteManagement.Password) < minimumRemoteManagementPasswordLength {
+			return nil, fmt.Errorf("remote management password must contain at least %d characters", minimumRemoteManagementPasswordLength)
+		}
 	}
 
 	cfg.Pprof.Addr = strings.TrimSpace(cfg.Pprof.Addr)
@@ -1222,16 +1214,6 @@ func NormalizeOAuthExcludedModels(entries map[string][]string) map[string][]stri
 	return out
 }
 
-// hashSecret hashes the given secret using bcrypt.
-func hashSecret(secret string) (string, error) {
-	// Use default cost for simplicity.
-	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedBytes), nil
-}
-
 // SaveConfigPreserveComments writes the config back to YAML while preserving existing comments
 // and key ordering by loading the original file into a yaml.Node tree and updating values in-place.
 func SaveConfigPreserveComments(configFile string, cfg *Config) error {
@@ -1551,8 +1533,6 @@ func isKnownDefaultValue(path []string, node *yaml.Node) bool {
 		switch fullPath {
 		case "pprof.addr":
 			return node.Value == DefaultPprofAddr
-		case "remote-management.panel-github-repository":
-			return node.Value == DefaultPanelGitHubRepository
 		case "plugins.dir":
 			return node.Value == "plugins"
 		case "routing.strategy":

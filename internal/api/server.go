@@ -6,7 +6,6 @@ package api
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -31,7 +30,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
@@ -47,6 +45,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	coreexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
+	managementweb "github.com/router-for-me/CLIProxyAPI/v7/web"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 	"gopkg.in/yaml.v3"
@@ -80,7 +79,6 @@ type serverOptionConfig struct {
 	engineConfigurator    func(*gin.Engine)
 	routerConfigurator    func(*gin.Engine, *handlers.BaseAPIHandler, *config.Config)
 	requestLoggerFactory  func(*config.Config, string) logging.RequestLogger
-	localPassword         string
 	keepAliveEnabled      bool
 	keepAliveTimeout      time.Duration
 	keepAliveOnTimeout    func()
@@ -131,13 +129,6 @@ func WithEngineConfigurator(fn func(*gin.Engine)) ServerOption {
 func WithRouterConfigurator(fn func(*gin.Engine, *handlers.BaseAPIHandler, *config.Config)) ServerOption {
 	return func(cfg *serverOptionConfig) {
 		cfg.routerConfigurator = fn
-	}
-}
-
-// WithLocalManagementPassword stores a runtime-only management password accepted for localhost requests.
-func WithLocalManagementPassword(password string) ServerOption {
-	return func(cfg *serverOptionConfig) {
-		cfg.localPassword = password
 	}
 }
 
@@ -250,11 +241,6 @@ type Server struct {
 	// managementRoutesEnabled controls whether management endpoints serve real handlers.
 	managementRoutesEnabled atomic.Bool
 
-	// envManagementSecret indicates whether MANAGEMENT_PASSWORD is configured.
-	envManagementSecret bool
-
-	localPassword string
-
 	keepAliveEnabled   bool
 	keepAliveTimeout   time.Duration
 	keepAliveOnTimeout func()
@@ -323,23 +309,18 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		wd = configFilePath
 	}
 
-	envAdminPassword, envAdminPasswordSet := os.LookupEnv("MANAGEMENT_PASSWORD")
-	envAdminPassword = strings.TrimSpace(envAdminPassword)
-	envManagementSecret := envAdminPasswordSet && envAdminPassword != ""
-
 	// Create server instance
 	s := &Server{
-		engine:              engine,
-		handlers:            handlers.NewBaseAPIHandlers(effectiveSDKConfig(cfg), authManager),
-		cfg:                 cfg,
-		accessManager:       accessManager,
-		requestLogger:       requestLogger,
-		loggerToggle:        toggle,
-		configFilePath:      configFilePath,
-		currentPath:         wd,
-		envManagementSecret: envManagementSecret,
-		wsRoutes:            make(map[string]struct{}),
-		pluginHost:          optionState.pluginHost,
+		engine:         engine,
+		handlers:       handlers.NewBaseAPIHandlers(effectiveSDKConfig(cfg), authManager),
+		cfg:            cfg,
+		accessManager:  accessManager,
+		requestLogger:  requestLogger,
+		loggerToggle:   toggle,
+		configFilePath: configFilePath,
+		currentPath:    wd,
+		wsRoutes:       make(map[string]struct{}),
+		pluginHost:     optionState.pluginHost,
 
 		exampleAPIKeySafeModeEnabled: optionState.exampleAPIKeySafeMode,
 	}
@@ -356,7 +337,6 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	if authManager != nil {
 		authManager.SetRetryConfig(cfg.RequestRetry, time.Duration(cfg.MaxRetryInterval)*time.Second, cfg.MaxRetryCredentials)
 	}
-	managementasset.SetCurrentConfig(cfg)
 	auth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 	auth.SetTransientErrorCooldownSeconds(cfg.TransientErrorCooldownSeconds)
 	applySignatureCacheConfig(nil, cfg)
@@ -364,9 +344,6 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager)
 	s.mgmt.SetPluginHost(optionState.pluginHost)
 	s.mgmt.SetConfigReloadHook(optionState.configReloadHook)
-	if optionState.localPassword != "" {
-		s.mgmt.SetLocalPassword(optionState.localPassword)
-	}
 	logDir := logging.ResolveLogDirectory(cfg)
 	s.mgmt.SetLogDirectory(logDir)
 	if optionState.postAuthHook != nil {
@@ -375,8 +352,6 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	if optionState.postAuthPersistHook != nil {
 		s.mgmt.SetPostAuthPersistHook(optionState.postAuthPersistHook)
 	}
-	s.localPassword = optionState.localPassword
-
 	// Home heartbeat gate: when home is enabled, block all endpoints with 503 until the
 	// subscribe-config heartbeat connection is healthy.
 	engine.Use(s.homeHeartbeatMiddleware())
@@ -390,14 +365,9 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 		optionState.routerConfigurator(engine, s.handlers, cfg)
 	}
 
-	// Register management routes when configuration or environment secrets are available,
-	// or when a local management password is provided (e.g. TUI mode).
-	hasManagementSecret := cfg.RemoteManagement.SecretKey != "" || envManagementSecret || s.localPassword != ""
-	s.managementRoutesEnabled.Store(hasManagementSecret)
-	redisqueue.SetEnabled(hasManagementSecret || (cfg != nil && cfg.Home.Enabled))
-	if hasManagementSecret {
-		s.registerManagementRoutes()
-	}
+	s.managementRoutesEnabled.Store(cfg != nil && !cfg.Home.Enabled)
+	redisqueue.SetEnabled(cfg != nil)
+	s.registerManagementRoutes()
 	s.refreshPluginManagementRoutes()
 	engine.NoRoute(s.pluginManagementNoRoute)
 
@@ -448,12 +418,8 @@ func (s *Server) exampleAPIKeySafeModeMiddleware() gin.HandlerFunc {
 		}
 
 		path := c.Request.URL.Path
-		if path == exampleAPIKeyManagementPath && c.Query("safe-mode") == "configure" {
-			c.Next()
-			return
-		}
 		if (path == "/" || path == exampleAPIKeyManagementPath) && (c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead) {
-			s.serveExampleAPIKeyWarningPage(c)
+			c.Next()
 			return
 		}
 		if !isExampleAPIKeySafeModeProxyPath(path) {
@@ -516,6 +482,7 @@ func (s *Server) setupRoutes() {
 	s.engine.HEAD("/healthz", healthzHandler)
 
 	s.engine.GET("/management.html", s.serveManagementControlPanel)
+	s.engine.HEAD("/management.html", s.serveManagementControlPanel)
 	openaiHandlers := openai.NewOpenAIAPIHandler(s.handlers)
 	geminiHandlers := gemini.NewGeminiAPIHandler(s.handlers)
 	claudeCodeHandlers := claude.NewClaudeCodeAPIHandler(s.handlers)
@@ -571,16 +538,9 @@ func (s *Server) setupRoutes() {
 		v1beta.GET("/models/*action", s.geminiGetHandler(geminiHandlers))
 	}
 
-	// Root endpoint
+	// The integrated web console is the default browser entry point.
 	s.engine.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "CLI Proxy API Server",
-			"endpoints": []string{
-				"POST /v1/chat/completions",
-				"POST /v1/completions",
-				"GET /v1/models",
-			},
-		})
+		c.Redirect(http.StatusTemporaryRedirect, "/management.html")
 	})
 
 	// OAuth callback endpoints (reuse main server port)
@@ -628,7 +588,6 @@ func (s *Server) setupRoutes() {
 		c.String(http.StatusOK, oauthCallbackSuccessHTML)
 	})
 
-	// Management routes are registered lazily by registerManagementRoutes when a secret is configured.
 }
 
 func (s *Server) codexAlphaSearchModelRouterHost() handlers.PluginModelRouterHost {
@@ -930,14 +889,17 @@ func (s *Server) registerManagementRoutes() {
 		return
 	}
 
-	log.Info("management routes registered after secret key configuration")
+	log.Info("integrated web management routes registered")
 
 	s.engine.POST("/v0/management/oauth-callback", s.managementAvailabilityMiddleware(), s.mgmt.PostOAuthCallback)
 	s.engine.GET("/v0/management/oauth-callback", s.managementAvailabilityMiddleware(), s.mgmt.GetOAuthCallback)
+	s.engine.POST("/v0/management/auth/login", s.managementAvailabilityMiddleware(), s.mgmt.Login)
+	s.engine.GET("/v0/management/auth/session", s.managementAvailabilityMiddleware(), s.mgmt.GetSession)
 
 	mgmt := s.engine.Group("/v0/management")
 	mgmt.Use(s.managementAvailabilityMiddleware(), s.mgmt.Middleware())
 	{
+		mgmt.POST("/auth/logout", s.mgmt.Logout)
 		mgmt.GET("/config", s.mgmt.GetConfig)
 		mgmt.GET("/config.yaml", s.mgmt.GetConfigYAML)
 		mgmt.PUT("/config.yaml", s.mgmt.PutConfigYAML)
@@ -1194,32 +1156,18 @@ func (s *Server) pluginResourceNoRoute(c *gin.Context) {
 
 func (s *Server) serveManagementControlPanel(c *gin.Context) {
 	cfg := s.cfg
-	if cfg == nil || cfg.Home.Enabled || cfg.RemoteManagement.DisableControlPanel {
+	if cfg == nil || cfg.Home.Enabled {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	filePath := managementasset.FilePath(s.configFilePath)
-	if strings.TrimSpace(filePath) == "" {
-		c.AbortWithStatus(http.StatusNotFound)
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Header("X-Content-Type-Options", "nosniff")
+	if c.Request.Method == http.MethodHead {
+		c.Status(http.StatusOK)
 		return
 	}
-
-	if _, err := os.Stat(filePath); err != nil {
-		if os.IsNotExist(err) {
-			// Synchronously ensure management.html is available with a detached context.
-			// Control panel bootstrap should not be canceled by client disconnects.
-			if !managementasset.EnsureLatestManagementHTML(context.Background(), managementasset.StaticDir(s.configFilePath), cfg.ProxyURL, cfg.RemoteManagement.PanelGitHubRepository) {
-				c.AbortWithStatus(http.StatusNotFound)
-				return
-			}
-		} else {
-			log.WithError(err).Error("failed to stat management control panel asset")
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-	}
-
-	c.File(filePath)
+	c.Data(http.StatusOK, "text/html; charset=utf-8", managementweb.IndexHTML())
 }
 
 func (s *Server) enableKeepAlive(timeout time.Duration, onTimeout func()) {
@@ -1239,23 +1187,6 @@ func (s *Server) enableKeepAlive(timeout time.Duration, onTimeout func()) {
 }
 
 func (s *Server) handleKeepAlive(c *gin.Context) {
-	if s.localPassword != "" {
-		provided := strings.TrimSpace(c.GetHeader("Authorization"))
-		if provided != "" {
-			parts := strings.SplitN(provided, " ", 2)
-			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-				provided = parts[1]
-			}
-		}
-		if provided == "" {
-			provided = strings.TrimSpace(c.GetHeader("X-Local-Password"))
-		}
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(s.localPassword)) != 1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
-			return
-		}
-	}
-
 	s.signalKeepAlive()
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -2022,38 +1953,8 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		util.SetLogLevel(cfg)
 	}
 
-	prevSecretEmpty := true
-	if oldCfg != nil {
-		prevSecretEmpty = oldCfg.RemoteManagement.SecretKey == ""
-	}
-	newSecretEmpty := cfg.RemoteManagement.SecretKey == ""
-	if s.envManagementSecret {
-		s.registerManagementRoutes()
-		if s.managementRoutesEnabled.CompareAndSwap(false, true) {
-			log.Info("management routes enabled via MANAGEMENT_PASSWORD")
-		} else {
-			s.managementRoutesEnabled.Store(true)
-		}
-	} else {
-		switch {
-		case prevSecretEmpty && !newSecretEmpty:
-			s.registerManagementRoutes()
-			if s.managementRoutesEnabled.CompareAndSwap(false, true) {
-				log.Info("management routes enabled after secret key update")
-			} else {
-				s.managementRoutesEnabled.Store(true)
-			}
-		case !prevSecretEmpty && newSecretEmpty:
-			if s.managementRoutesEnabled.CompareAndSwap(true, false) {
-				log.Info("management routes disabled after secret key removal")
-			} else {
-				s.managementRoutesEnabled.Store(false)
-			}
-		default:
-			s.managementRoutesEnabled.Store(!newSecretEmpty)
-		}
-	}
-	redisqueue.SetEnabled(s.managementRoutesEnabled.Load() || (cfg != nil && cfg.Home.Enabled))
+	s.managementRoutesEnabled.Store(!cfg.Home.Enabled)
+	redisqueue.SetEnabled(true)
 
 	exampleAPIKeySafeModeRequired := s.exampleAPIKeySafeModeRequired(cfg)
 	if exampleAPIKeySafeModeRequired {
@@ -2068,7 +1969,6 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 	if oldCfg != nil && s.wsAuthChanged != nil && oldCfg.WebsocketAuth != cfg.WebsocketAuth {
 		s.wsAuthChanged(oldCfg.WebsocketAuth, cfg.WebsocketAuth)
 	}
-	managementasset.SetCurrentConfig(cfg)
 	if errContext := ctx.Err(); errContext != nil {
 		return false
 	}

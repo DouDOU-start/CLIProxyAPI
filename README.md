@@ -124,6 +124,20 @@ PackyCode provides special discounts for our software users: register using <a h
 
 CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
+### Local Development
+
+The web management console is built into the Go binary and opens at `http://localhost:8317/`.
+
+```bash
+MANAGEMENT_EMAIL=admin@example.com \
+MANAGEMENT_PASSWORD=change-me-to-a-strong-password \
+make dev
+```
+
+The password must contain at least 8 characters. You can also set `remote-management.email` and `remote-management.password` directly in `config.yaml`; the password remains plaintext. Existing bcrypt values remain supported for compatibility.
+
+For frontend hot reload, run `make dev-backend` and `make web-dev` in separate terminals, then open `http://localhost:5173/`.
+
 ## Management API
 
 see [MANAGEMENT_API.md](https://help.router-for.me/management/api)

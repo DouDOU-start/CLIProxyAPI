@@ -392,6 +392,48 @@ func newTestServerWithOptions(t *testing.T, opts ...ServerOption) *Server {
 	return NewServer(cfg, authManager, accessManager, configPath, opts...)
 }
 
+const (
+	testManagementEmail    = "admin@example.com"
+	testManagementPassword = "test-management-password"
+)
+
+func configureManagementAuth(t *testing.T) {
+	t.Helper()
+	t.Setenv("MANAGEMENT_EMAIL", testManagementEmail)
+	t.Setenv("MANAGEMENT_PASSWORD", testManagementPassword)
+}
+
+func managementSessionForTest(t *testing.T, server *Server) (*http.Cookie, string) {
+	t.Helper()
+	body := strings.NewReader(`{"email":"` + testManagementEmail + `","password":"` + testManagementPassword + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v0/management/auth/login", body)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	server.engine.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("management login status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+
+	var response struct {
+		CSRFToken string `json:"csrf_token"`
+	}
+	if errUnmarshal := json.Unmarshal(rr.Body.Bytes(), &response); errUnmarshal != nil {
+		t.Fatalf("unmarshal management login response: %v", errUnmarshal)
+	}
+	cookies := rr.Result().Cookies()
+	if len(cookies) == 0 || response.CSRFToken == "" {
+		t.Fatalf("management login did not return a cookie and CSRF token: %s", rr.Body.String())
+	}
+	return cookies[0], response.CSRFToken
+}
+
+func addManagementSession(req *http.Request, cookie *http.Cookie, csrfToken string) {
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.AddCookie(cookie)
+	req.Header.Set("X-CSRF-Token", csrfToken)
+}
+
 func TestHealthz(t *testing.T) {
 	server := newTestServer(t)
 
@@ -892,10 +934,11 @@ func TestCodexAlphaSearchRecordsRequestLog(t *testing.T) {
 }
 
 func TestManagementResponseExposesPluginSupportHeaderForCORS(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
+	configureManagementAuth(t)
 
 	server := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("Origin", "http://127.0.0.1:5173")
 	rr := httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
@@ -921,8 +964,8 @@ func TestManagementResponseExposesPluginSupportHeaderForCORS(t *testing.T) {
 	}
 }
 
-func TestOAuthCallbackRouteSkipsManagementKeyMiddleware(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
+func TestOAuthCallbackRouteSkipsManagementSessionMiddleware(t *testing.T) {
+	configureManagementAuth(t)
 
 	server := newTestServer(t)
 	state := "server-plugin-oauth-state"
@@ -941,7 +984,7 @@ func TestOAuthCallbackRouteSkipsManagementKeyMiddleware(t *testing.T) {
 
 	callbackPath := filepath.Join(server.cfg.AuthDir, ".oauth-gemini-cli-"+state+".oauth")
 	if _, errRead := os.ReadFile(callbackPath); errRead != nil {
-		t.Fatalf("expected callback file to be written without management key: %v", errRead)
+		t.Fatalf("expected callback file to be written without a management session: %v", errRead)
 	}
 }
 
@@ -970,7 +1013,7 @@ func TestNewServerWithoutPluginHostLeavesHandlerInterceptorsDisabled(t *testing.
 }
 
 func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
+	configureManagementAuth(t)
 
 	prevQueueEnabled := redisqueue.Enabled()
 	redisqueue.SetEnabled(false)
@@ -980,15 +1023,17 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 	})
 
 	server := newTestServer(t)
+	cookie, csrfToken := managementSessionForTest(t, server)
 
 	redisqueue.Enqueue([]byte(`{"id":1}`))
 	redisqueue.Enqueue([]byte(`{"id":2}`))
 
-	missingKeyReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue?count=2", nil)
-	missingKeyRR := httptest.NewRecorder()
-	server.engine.ServeHTTP(missingKeyRR, missingKeyReq)
-	if missingKeyRR.Code != http.StatusUnauthorized {
-		t.Fatalf("missing key status = %d, want %d body=%s", missingKeyRR.Code, http.StatusUnauthorized, missingKeyRR.Body.String())
+	missingSessionReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue?count=2", nil)
+	missingSessionReq.RemoteAddr = "127.0.0.1:12345"
+	missingSessionRR := httptest.NewRecorder()
+	server.engine.ServeHTTP(missingSessionRR, missingSessionReq)
+	if missingSessionRR.Code != http.StatusUnauthorized {
+		t.Fatalf("missing session status = %d, want %d body=%s", missingSessionRR.Code, http.StatusUnauthorized, missingSessionRR.Body.String())
 	}
 
 	legacyReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage?count=2", nil)
@@ -1000,7 +1045,7 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 	}
 
 	authReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-queue?count=2", nil)
-	authReq.Header.Set("Authorization", "Bearer test-management-key")
+	addManagementSession(authReq, cookie, csrfToken)
 	authRR := httptest.NewRecorder()
 	server.engine.ServeHTTP(authRR, authReq)
 	if authRR.Code != http.StatusOK {
@@ -1032,9 +1077,10 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 }
 
 func TestManagementPluginsRouteRegistered(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
+	configureManagementAuth(t)
 
 	server := newTestServer(t)
+	cookie, csrfToken := managementSessionForTest(t, server)
 	enabled := true
 	server.cfg.Plugins.Configs = map[string]proxyconfig.PluginInstanceConfig{
 		"sample": {Enabled: &enabled, Priority: 4},
@@ -1044,7 +1090,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v0/management/plugins", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	addManagementSession(req, cookie, csrfToken)
 	rr := httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 
@@ -1064,7 +1110,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v0/management/plugins/sample/config", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	addManagementSession(req, cookie, csrfToken)
 	rr = httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -1082,7 +1128,7 @@ func TestManagementPluginsRouteRegistered(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodDelete, "/v0/management/plugins/sample", nil)
-	req.Header.Set("Authorization", "Bearer test-management-key")
+	addManagementSession(req, cookie, csrfToken)
 	rr = httptest.NewRecorder()
 	server.engine.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -1130,14 +1176,13 @@ func TestVideosRoutesKeepXAINativeAndExposeOpenAIPrefix(t *testing.T) {
 }
 
 func TestHomeEnabledHidesManagementEndpointsAndControlPanel(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
+	configureManagementAuth(t)
 
 	server := newTestServer(t)
 	server.cfg.Home.Enabled = true
 
 	t.Run("management endpoints return 404", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
-		req.Header.Set("Authorization", "Bearer test-management-key")
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
 		if rr.Code != http.StatusNotFound {
@@ -1156,46 +1201,39 @@ func TestHomeEnabledHidesManagementEndpointsAndControlPanel(t *testing.T) {
 }
 
 func TestExampleAPIKeySafeModeShowsWarningAndKeepsManagement(t *testing.T) {
-	t.Setenv("MANAGEMENT_PASSWORD", "test-management-key")
-	staticDir := t.TempDir()
-	t.Setenv("MANAGEMENT_STATIC_PATH", staticDir)
-	if err := os.WriteFile(filepath.Join(staticDir, "management.html"), []byte("<html>management app</html>"), 0o600); err != nil {
-		t.Fatalf("failed to write management asset: %v", err)
-	}
+	configureManagementAuth(t)
 
 	server := newTestServerWithOptions(t, WithExampleAPIKeySafeMode())
 	cfg := *server.cfg
 	cfg.APIKeys = []string{"your-api-key-1"}
 	server.UpdateClients(&cfg)
+	cookie, csrfToken := managementSessionForTest(t, server)
 
-	t.Run("root warning page includes management link", func(t *testing.T) {
+	t.Run("root redirects to integrated management", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
+		if rr.Code != http.StatusTemporaryRedirect {
+			t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusTemporaryRedirect, rr.Body.String())
 		}
-		body := rr.Body.String()
-		for _, want := range []string{"Example API key detected", "Open Management", `href="/management.html?safe-mode=configure"`} {
-			if !strings.Contains(body, want) {
-				t.Fatalf("warning page missing %q: %s", want, body)
-			}
+		if location := rr.Header().Get("Location"); location != "/management.html" {
+			t.Fatalf("Location = %q, want /management.html", location)
 		}
 	})
 
-	t.Run("management html defaults to warning page", func(t *testing.T) {
+	t.Run("management html serves integrated console", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/management.html", nil)
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
 		}
-		if !strings.Contains(rr.Body.String(), "Example API key detected") {
-			t.Fatalf("management.html did not show warning page: %s", rr.Body.String())
+		if !strings.Contains(strings.ToLower(rr.Body.String()), "<!doctype html>") {
+			t.Fatalf("management.html did not serve the integrated console: %s", rr.Body.String())
 		}
 	})
 
-	t.Run("management html head stops at warning page", func(t *testing.T) {
+	t.Run("management html head returns metadata only", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodHead, "/management.html", nil)
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
@@ -1217,7 +1255,7 @@ func TestExampleAPIKeySafeModeShowsWarningAndKeepsManagement(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d body=%s", rr.Code, http.StatusOK, rr.Body.String())
 		}
-		if !strings.Contains(rr.Body.String(), "management app") {
+		if !strings.Contains(strings.ToLower(rr.Body.String()), "<!doctype html>") {
 			t.Fatalf("management panel body missing: %s", rr.Body.String())
 		}
 	})
@@ -1248,7 +1286,7 @@ func TestExampleAPIKeySafeModeShowsWarningAndKeepsManagement(t *testing.T) {
 
 	t.Run("management endpoints still work", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v0/management/config", nil)
-		req.Header.Set("Authorization", "Bearer test-management-key")
+		addManagementSession(req, cookie, csrfToken)
 		rr := httptest.NewRecorder()
 		server.engine.ServeHTTP(rr, req)
 		if rr.Code != http.StatusOK {

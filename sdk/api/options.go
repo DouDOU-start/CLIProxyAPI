@@ -30,11 +30,6 @@ func WithRouterConfigurator(fn func(*gin.Engine, *handlers.BaseAPIHandler, *conf
 	return internalapi.WithRouterConfigurator(fn)
 }
 
-// WithLocalManagementPassword stores a runtime-only management password accepted for localhost requests.
-func WithLocalManagementPassword(password string) ServerOption {
-	return internalapi.WithLocalManagementPassword(password)
-}
-
 // WithKeepAliveEndpoint enables a keep-alive endpoint with the provided timeout and callback.
 func WithKeepAliveEndpoint(timeout time.Duration, onTimeout func()) ServerOption {
 	return internalapi.WithKeepAliveEndpoint(timeout, onTimeout)

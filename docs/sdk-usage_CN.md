@@ -72,7 +72,8 @@ svc, _ := cliproxy.NewBuilder().
 
 ## 管理 API（内嵌时）
 
-- 仅当 `config.yaml` 中设置了 `remote-management.secret-key` 时才会挂载管理端点。
+- 内置 Web 管理页位于 `/management.html`，除 Home 模式外，管理端点始终挂载。
+- 登录前需同时配置 `remote-management.email` 和 `remote-management.password`；密码会保持明文，已有 bcrypt 值仍可兼容使用。
 - 远程访问还需要 `remote-management.allow-remote: true`。
 - 具体端点见 MANAGEMENT_API_CN.md。内嵌服务器会在配置端口下暴露 `/v0/management`。
 
@@ -161,4 +162,3 @@ _ = svc.Shutdown(ctx)
 - 热更新：`config.yaml` 与 `auths/` 变化会被自动侦测并应用。
 - 请求日志可通过管理 API 在运行时开关。
 - `gemini-web.*` 相关配置在内嵌服务器中会被遵循。
-

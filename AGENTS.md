@@ -14,7 +14,7 @@ go test ./... # Run all tests
 go test -v -run TestName ./path/to/pkg # Run single test
 go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRED after changes)
 ```
-- Common flags: `--config <path>`, `--tui`, `--standalone`, `--local-model`, `--no-browser`, `--oauth-callback-port <port>`
+- Common flags: `--config <path>`, `--local-model`, `--no-browser`, `--oauth-callback-port <port>`
 
 ## Config
 - Default config: `config.yaml` (template: `config.example.yaml`)
@@ -31,12 +31,11 @@ go build -o test-output ./cmd/server && rm test-output # Verify compile (REQUIRE
 - `internal/translator/` — Provider protocol translators (and shared `common`)
 - `internal/registry/` — Model registry + remote updater (`StartModelsUpdater`); `--local-model` disables remote updates
 - `internal/store/` — Storage implementations and secret resolution
-- `internal/managementasset/` — Config snapshots and management assets
+- `web/` — React management console source and the generated single-file asset embedded by Go
 - `internal/cache/` — Request signature caching
 - `internal/watcher/` — Config hot-reload and watchers
 - `internal/wsrelay/` — WebSocket relay sessions
 - `internal/usage/` — Usage and token accounting
-- `internal/tui/` — Bubbletea terminal UI (`--tui`, `--standalone`)
 - `sdk/cliproxy/` — Embeddable SDK entry (service/builder/watchers/pipeline)
 - `test/` — Cross-module integration tests
 

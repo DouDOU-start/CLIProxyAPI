@@ -8,7 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -25,7 +24,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/homeplugins"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/managementasset"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/redisqueue"
@@ -33,7 +31,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/safemode"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/store"
 	_ "github.com/router-for-me/CLIProxyAPI/v7/internal/translator"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/tui"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v7/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
@@ -56,11 +53,8 @@ func init() {
 	buildinfo.BuildDate = BuildDate
 }
 
-func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode bool) bool {
+func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, cloudConfigMissing, homeMode bool) bool {
 	if cfg == nil || commandMode || homeMode || cloudConfigMissing {
-		return false
-	}
-	if tuiMode && !standalone {
 		return false
 	}
 	return safemode.HasExampleAPIKeys(cfg.APIKeys)
@@ -84,11 +78,8 @@ func main() {
 	var vertexImport string
 	var vertexImportPrefix string
 	var configPath string
-	var password string
 	var homeJWT string
 	var homeDisableClusterDiscovery bool
-	var tuiMode bool
-	var standalone bool
 	var localModel bool
 
 	// Define command-line flags for different operation modes.
@@ -103,20 +94,14 @@ func main() {
 	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
 	flag.StringVar(&vertexImport, "vertex-import", "", "Import Vertex service account key JSON file")
 	flag.StringVar(&vertexImportPrefix, "vertex-import-prefix", "", "Prefix for Vertex model namespacing (use with -vertex-import)")
-	flag.StringVar(&password, "password", "", "")
 	flag.StringVar(&homeJWT, "home-jwt", "", "Home control plane JWT for mTLS certificate bootstrap and connection")
 	flag.BoolVar(&homeDisableClusterDiscovery, "home-disable-cluster-discovery", false, "Disable Home CLUSTER NODES discovery and keep using the configured -home-jwt address")
-	flag.BoolVar(&tuiMode, "tui", false, "Start with terminal management UI")
-	flag.BoolVar(&standalone, "standalone", false, "In TUI mode, start an embedded local server")
 	flag.BoolVar(&localModel, "local-model", false, "Use embedded models.json and codex_client_models.json only, skip remote model catalog fetching")
 
 	flag.CommandLine.Usage = func() {
 		out := flag.CommandLine.Output()
 		_, _ = fmt.Fprintf(out, "Usage of %s\n", os.Args[0])
 		flag.CommandLine.VisitAll(func(f *flag.Flag) {
-			if f.Name == "password" {
-				return
-			}
 			s := fmt.Sprintf("  -%s", f.Name)
 			name, unquoteUsage := flag.UnquoteUsage(f)
 			if name != "" {
@@ -576,8 +561,6 @@ func main() {
 	} else {
 		cfg.AuthDir = resolvedAuthDir
 	}
-	managementasset.SetCurrentConfig(cfg)
-
 	// Create login options to be used in authentication flows.
 	options := &cmd.LoginOptions{
 		NoBrowser:    noBrowser,
@@ -587,7 +570,7 @@ func main() {
 	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || xaiLogin
 	cloudConfigMissing := isCloudDeploy && !configFileExists
 	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
-	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, tuiMode, standalone, cloudConfigMissing, homeMode)
+	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, cloudConfigMissing, homeMode)
 	serverOptions := []api.ServerOption(nil)
 	if exampleAPIKeySafeMode {
 		matches := safemode.ExampleAPIKeys(cfg.APIKeys)
@@ -659,91 +642,12 @@ func main() {
 			cmd.WaitForCloudDeploy()
 			return
 		}
-		if localModel && (!tuiMode || standalone) {
+		if localModel {
 			log.Info("Local model mode: using embedded model catalogs, remote model updates disabled")
 		}
-		if tuiMode {
-			if standalone {
-				// Standalone mode: start an embedded local server and connect TUI client to it.
-				managementasset.StartAutoUpdater(context.Background(), configFilePath)
-				misc.StartAntigravityVersionUpdater(context.Background())
-				startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
-				hook := tui.NewLogHook(2000)
-				hook.SetFormatter(&logging.LogFormatter{})
-				log.AddHook(hook)
-
-				origStdout := os.Stdout
-				origStderr := os.Stderr
-				origLogOutput := log.StandardLogger().Out
-				log.SetOutput(io.Discard)
-
-				devNull, errOpenDevNull := os.Open(os.DevNull)
-				if errOpenDevNull == nil {
-					os.Stdout = devNull
-					os.Stderr = devNull
-				}
-
-				restoreIO := func() {
-					os.Stdout = origStdout
-					os.Stderr = origStderr
-					log.SetOutput(origLogOutput)
-					if devNull != nil {
-						_ = devNull.Close()
-					}
-				}
-
-				localMgmtPassword := fmt.Sprintf("tui-%d-%d", os.Getpid(), time.Now().UnixNano())
-				if password == "" {
-					password = localMgmtPassword
-				}
-
-				cancel, done := cmd.StartServiceBackgroundWithPluginHost(cfg, configFilePath, password, pluginHost, serverOptions...)
-
-				client := tui.NewClient(cfg.Port, password)
-				ready := false
-				backoff := 100 * time.Millisecond
-				for i := 0; i < 30; i++ {
-					if _, errGetConfig := client.GetConfig(); errGetConfig == nil {
-						ready = true
-						break
-					}
-					time.Sleep(backoff)
-					if backoff < time.Second {
-						backoff = time.Duration(float64(backoff) * 1.5)
-					}
-				}
-
-				if !ready {
-					restoreIO()
-					cancel()
-					<-done
-					fmt.Fprintf(os.Stderr, "TUI error: embedded server is not ready\n")
-					return
-				}
-
-				if errRun := tui.Run(cfg.Port, password, hook, origStdout); errRun != nil {
-					restoreIO()
-					fmt.Fprintf(os.Stderr, "TUI error: %v\n", errRun)
-				} else {
-					restoreIO()
-				}
-
-				cancel()
-				<-done
-			} else {
-				// Default TUI mode: pure management client.
-				// The proxy server must already be running.
-				if errRun := tui.Run(cfg.Port, password, nil, os.Stdout); errRun != nil {
-					fmt.Fprintf(os.Stderr, "TUI error: %v\n", errRun)
-				}
-			}
-		} else {
-			// Start the main proxy service
-			managementasset.StartAutoUpdater(context.Background(), configFilePath)
-			misc.StartAntigravityVersionUpdater(context.Background())
-			startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
-			cmd.StartServiceWithPluginHost(cfg, configFilePath, password, pluginHost, serverOptions...)
-		}
+		misc.StartAntigravityVersionUpdater(context.Background())
+		startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
+		cmd.StartServiceWithPluginHost(cfg, configFilePath, pluginHost, serverOptions...)
 	}
 }
 

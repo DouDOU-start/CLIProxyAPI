@@ -72,7 +72,8 @@ These options mirror the internals used by the CLI server.
 
 ## Management API (when embedded)
 
-- Management endpoints are mounted only when `remote-management.secret-key` is set in `config.yaml`.
+- The integrated web console is available at `/management.html` and management endpoints are always mounted outside Home mode.
+- Configure both `remote-management.email` and `remote-management.password` before signing in. The password remains plaintext; existing bcrypt values remain supported for compatibility.
 - Remote access additionally requires `remote-management.allow-remote: true`.
 - See MANAGEMENT_API.md for endpoints. Your embedded server exposes them under `/v0/management` on the configured port.
 

@@ -2,10 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/mail"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,7 +31,6 @@ func ParseConfigBytes(data []byte) (*Config, error) {
 	cfg.WebsocketAuth = true
 	cfg.Pprof.Enable = false
 	cfg.Pprof.Addr = DefaultPprofAddr
-	cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
 	cfg.CredentialInFlight = DefaultCredentialInFlightConfig()
 
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
@@ -43,18 +42,21 @@ func ParseConfigBytes(data []byte) (*Config, error) {
 		return nil, errValidate
 	}
 
-	// Hash remote management key if plaintext is detected (nested), but do NOT persist.
-	if cfg.RemoteManagement.SecretKey != "" && !looksLikeBcrypt(cfg.RemoteManagement.SecretKey) {
-		hashed, errHash := bcrypt.GenerateFromPassword([]byte(cfg.RemoteManagement.SecretKey), bcrypt.DefaultCost)
-		if errHash != nil {
-			return nil, fmt.Errorf("hash remote management key: %w", errHash)
-		}
-		cfg.RemoteManagement.SecretKey = string(hashed)
+	cfg.RemoteManagement.Email = strings.ToLower(strings.TrimSpace(cfg.RemoteManagement.Email))
+	cfg.RemoteManagement.Password = strings.TrimSpace(cfg.RemoteManagement.Password)
+	if (cfg.RemoteManagement.Email == "") != (cfg.RemoteManagement.Password == "") {
+		return nil, fmt.Errorf("remote management email and password must be configured together")
 	}
-
-	cfg.RemoteManagement.PanelGitHubRepository = strings.TrimSpace(cfg.RemoteManagement.PanelGitHubRepository)
-	if cfg.RemoteManagement.PanelGitHubRepository == "" {
-		cfg.RemoteManagement.PanelGitHubRepository = DefaultPanelGitHubRepository
+	if cfg.RemoteManagement.Email != "" {
+		address, errAddress := mail.ParseAddress(cfg.RemoteManagement.Email)
+		if errAddress != nil || !strings.EqualFold(address.Address, cfg.RemoteManagement.Email) {
+			return nil, fmt.Errorf("remote management email is invalid")
+		}
+	}
+	if cfg.RemoteManagement.Password != "" && !looksLikeBcrypt(cfg.RemoteManagement.Password) {
+		if len(cfg.RemoteManagement.Password) < minimumRemoteManagementPasswordLength {
+			return nil, fmt.Errorf("remote management password must contain at least %d characters", minimumRemoteManagementPasswordLength)
+		}
 	}
 
 	cfg.Pprof.Addr = strings.TrimSpace(cfg.Pprof.Addr)

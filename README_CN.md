@@ -124,6 +124,20 @@ PackyCode 为本软件用户提供了特别优惠：使用<a href="https://www.p
 
 CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-for.me/cn/)
 
+### 本地开发
+
+Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://localhost:8317/`。
+
+```bash
+MANAGEMENT_EMAIL=admin@example.com \
+MANAGEMENT_PASSWORD=change-me-to-a-strong-password \
+make dev
+```
+
+密码至少需要 8 个字符。也可以直接在 `config.yaml` 中设置 `remote-management.email` 和 `remote-management.password`；密码会保持明文，已有 bcrypt 值仍可兼容使用。
+
+需要前端热更新时，分别运行 `make dev-backend` 和 `make web-dev`，然后访问 `http://localhost:5173/`。
+
 ## 管理 API 文档
 
 请参见 [MANAGEMENT_API_CN.md](https://help.router-for.me/cn/management/api)

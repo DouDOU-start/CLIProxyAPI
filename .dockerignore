@@ -39,3 +39,7 @@ bin
 .bmad
 _bmad
 _bmad-output
+
+# Web build artifacts and dependencies
+web/node_modules
+web/dist

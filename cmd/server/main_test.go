@@ -22,8 +22,6 @@ func TestShouldEnableExampleAPIKeySafeMode(t *testing.T) {
 		name               string
 		cfg                *config.Config
 		commandMode        bool
-		tuiMode            bool
-		standalone         bool
 		cloudConfigMissing bool
 		homeMode           bool
 		want               bool
@@ -32,21 +30,6 @@ func TestShouldEnableExampleAPIKeySafeMode(t *testing.T) {
 			name: "normal server with example key",
 			cfg:  cfgWithExampleKey,
 			want: true,
-		},
-		{
-			name:       "standalone tui with example key",
-			cfg:        cfgWithExampleKey,
-			tuiMode:    true,
-			standalone: true,
-			want:       true,
-		},
-		{
-			name:        "pure tui client is not blocked",
-			cfg:         cfgWithExampleKey,
-			tuiMode:     true,
-			standalone:  false,
-			commandMode: false,
-			want:        false,
 		},
 		{
 			name:        "one-shot command is not blocked",
@@ -80,7 +63,7 @@ func TestShouldEnableExampleAPIKeySafeMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldEnableExampleAPIKeySafeMode(tt.cfg, tt.commandMode, tt.tuiMode, tt.standalone, tt.cloudConfigMissing, tt.homeMode)
+			got := shouldEnableExampleAPIKeySafeMode(tt.cfg, tt.commandMode, tt.cloudConfigMissing, tt.homeMode)
 			if got != tt.want {
 				t.Fatalf("shouldEnableExampleAPIKeySafeMode() = %t, want %t", got, tt.want)
 			}

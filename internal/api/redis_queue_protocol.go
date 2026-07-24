@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -88,16 +87,7 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 		cmd := strings.ToUpper(strings.TrimSpace(args[0]))
 
 		if cmd != "AUTH" && !authed {
-			if s.mgmt != nil {
-				_, statusCode, errMsg := s.mgmt.AuthenticateManagementKey(clientIP, localClient, "")
-				if statusCode == http.StatusForbidden && strings.HasPrefix(errMsg, "IP banned due to too many failed attempts") {
-					_ = writeRedisError(writer, "ERR "+errMsg)
-				} else {
-					_ = writeRedisError(writer, "NOAUTH Authentication required.")
-				}
-			} else {
-				_ = writeRedisError(writer, "NOAUTH Authentication required.")
-			}
+			_ = writeRedisError(writer, "NOAUTH Authentication required.")
 			if !flush() {
 				return
 			}
@@ -106,18 +96,8 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 
 		switch cmd {
 		case "AUTH":
-			password, ok := parseAuthPassword(args)
+			email, password, ok := parseAuthCredentials(args)
 			if !ok {
-				if s.mgmt != nil {
-					_, statusCode, errMsg := s.mgmt.AuthenticateManagementKey(clientIP, localClient, "")
-					if statusCode == http.StatusForbidden && strings.HasPrefix(errMsg, "IP banned due to too many failed attempts") {
-						_ = writeRedisError(writer, "ERR "+errMsg)
-						if !flush() {
-							return
-						}
-						continue
-					}
-				}
 				_ = writeRedisError(writer, "ERR wrong number of arguments for 'auth' command")
 				if !flush() {
 					return
@@ -131,7 +111,7 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 				}
 				continue
 			}
-			allowed, _, errMsg := s.mgmt.AuthenticateManagementKey(clientIP, localClient, password)
+			allowed, _, errMsg := s.mgmt.AuthenticateManagementCredentials(clientIP, localClient, email, password)
 			if !allowed {
 				_ = writeRedisError(writer, "ERR "+errMsg)
 				if !flush() {
@@ -378,15 +358,11 @@ func resolveRemoteIP(addr net.Addr) (ip string, localClient bool) {
 	return host, localClient
 }
 
-func parseAuthPassword(args []string) (string, bool) {
-	switch len(args) {
-	case 2:
-		return args[1], true
-	case 3:
-		return args[2], true
-	default:
-		return "", false
+func parseAuthCredentials(args []string) (string, string, bool) {
+	if len(args) != 3 {
+		return "", "", false
 	}
+	return strings.TrimSpace(args[1]), args[2], true
 }
 
 func parseSubscribeChannel(args []string) (string, bool) {
