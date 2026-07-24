@@ -10,10 +10,24 @@
   );
 }
 
+.workspaceHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: $spacing-lg;
+
+  @include mobile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: $spacing-md;
+  }
+}
+
 .pageHeader {
   display: flex;
   flex-direction: column;
   gap: $spacing-sm;
+  min-width: 0;
 }
 
 .pageTitle {
@@ -27,6 +41,77 @@
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+.tabList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 0 0 auto;
+  min-width: 272px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-secondary);
+
+  @include mobile {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.tabButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: calc(#{$radius-md} - 2px);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.tabButtonActive {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 12%, transparent);
+
+  &:hover {
+    background: var(--bg-primary);
+  }
+}
+
+.viewContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+  min-width: 0;
 }
 
 .headerActions {

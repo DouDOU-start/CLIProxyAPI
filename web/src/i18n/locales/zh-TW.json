@@ -99,11 +99,8 @@
   },
   "nav": {
     "dashboard": "儀表板",
-    "quick_start": "快速開始",
-    "ai_providers": "AI 供應商",
-    "auth_files": "驗證檔案",
+    "auth_files": "驗證與配額",
     "oauth": "OAuth 登入",
-    "quota_management": "配額管理",
     "plugins": "插件管理",
     "plugin_store": "插件商店",
     "config_management": "設定面板",
@@ -119,11 +116,8 @@
   },
   "nav_meta": {
     "dashboard": "運行總覽",
-    "quick_start": "APIKEY.FUN 快速設定",
-    "ai_providers": "上游模型路由",
-    "auth_files": "Auth 檔案與憑證",
+    "auth_files": "憑證、OAuth 與帳戶配額",
     "oauth": "OAuth 授權登入",
-    "quota_management": "API Key 與限額",
     "plugins": "插件啟停與設定",
     "plugin_store": "探索並安裝插件",
     "logs": "請求追蹤與排查",
@@ -133,15 +127,11 @@
   "dashboard": {
     "current_config": "目前設定",
     "management_keys": "API 存取金鑰",
-    "provider_keys_detail": "G:{{gemini}} C:{{codex}} X:{{xai}} Cl:{{claude}} V:{{vertex}} O:{{openai}}",
     "oauth_credentials": "OAuth 憑證",
     "edit_settings": "編輯設定",
     "routing_strategy": "路由策略",
     "available_models": "可用模型",
     "available_models_desc": "所有供應商的模型總數",
-    "quick_start_card": "快速開始",
-    "quick_start_entry": "快速開始",
-    "quick_start_entry_desc": "進入快速開始頁面",
     "welcome_back": "歡迎回來",
     "greeting_morning": "早安",
     "greeting_afternoon": "午安",
@@ -166,9 +156,14 @@
     "routing_strategy_fill_first": "fill-first（優先填充）"
   },
   "auth_files": {
-    "title": "驗證檔案管理",
+    "title": "驗證與配額",
     "title_section": "驗證檔案",
-    "description": "這裡集中管理 CLI Proxy 支援的所有 JSON 驗證檔案（如 Qwen、Gemini、Vertex 等），上傳後即可在執行時啟用對應的 AI 服務。",
+    "description": "集中管理驗證檔案、OAuth 設定和上游帳戶配額。",
+    "tabs": {
+      "label": "驗證管理檢視",
+      "credentials": "憑證",
+      "quota": "配額"
+    },
     "upload_button": "上傳檔案",
     "delete_all_button": "刪除全部",
     "search_empty_title": "沒有符合的設定檔",
@@ -1328,272 +1323,5 @@
     "api_version": "CLI Proxy API 版本",
     "build_date": "建置時間",
     "version": "管理中心版本"
-  },
-  "providersPage": {
-    "header": {
-      "title": "AI 提供商",
-      "activeResources": "{{active}}/{{total}} 個活躍資源",
-      "providerFamilies": "{{count}} 個提供商家族",
-      "updatedAt": "更新於 {{time}}"
-    },
-    "actions": {
-      "refresh": "重新整理",
-      "syncing": "同步中",
-      "new": "新增",
-      "edit": "編輯",
-      "view": "檢視",
-      "delete": "刪除",
-      "cancel": "取消",
-      "save": "儲存",
-      "create": "建立",
-      "enable": "啟用",
-      "disable": "停用"
-    },
-    "categories": {
-      "title": "提供商",
-      "quickFill": "快速填入",
-      "activeCount": "{{active}}/{{total}} 活躍"
-    },
-    "providerNames": {
-      "gemini": "Gemini",
-      "codex": "Codex",
-      "xai": "xAI",
-      "claude": "Claude",
-      "claudeApi": "ClaudeAPI",
-      "vertex": "Vertex",
-      "openaiCompatibility": "OpenAI 相容",
-      "apikeyFun": "APIKEY.FUN",
-      "code0": "Code0",
-      "fennoAI": "FennoAI",
-      "qiniuCloud": "七牛雲",
-      "kimi": "Kimi"
-    },
-    "table": {
-      "key": "金鑰",
-      "baseUrl": "服務位址",
-      "prefix": "前綴",
-      "models": "模型/請求標頭",
-      "status": "狀態",
-      "actions": "操作",
-      "metrics": {
-        "models": "模型",
-        "keys": "金鑰",
-        "headers": "請求標頭"
-      },
-      "websocketsTag": "WebSockets",
-      "cloakTag": "Cloak",
-      "empty": "尚未新增設定,點擊右上角新增。",
-      "filterPlaceholder": "搜尋金鑰、位址、前綴…",
-      "description": "在 {{route}} 下管理資源"
-    },
-    "sponsor": {
-      "protocolSummary": "Anthropic / OpenAI / Gemini / Codex API (Responses)",
-      "detailHint": "{{provider}} 會按協議分別寫入對應的 API Key 設定,此處只做聚合管理。",
-      "registerLink": "點此註冊",
-      "registerNow": "立即註冊",
-      "dashboardLink": "控制面板",
-      "emptyRegisterHint": "尚未新增設定",
-      "apiKeyHint": "此金鑰只會寫入目前選擇的分組/協議設定。",
-      "usageCheck": "查詢額度",
-      "usageChecking": "查詢中",
-      "usageRemaining": "剩餘額度: {{amount}} {{unit}}",
-      "usageBreakdown": "已用 {{used}} / 總額 {{limit}}",
-      "usageStatus": "狀態: {{status}}",
-      "usageInvalid": "Key 無效",
-      "usageEmpty": "端點未回傳額度資料",
-      "usageApiKeyRequired": "API 金鑰必填",
-      "aggregationConflict": "此聚合提供商包含多筆後端設定或多個 OpenAI 金鑰。為避免資料遺失，請在原始碼設定中編輯。",
-      "partialMutationWarning": "操作失敗，但一個或多個協議可能已更新。已重新讀取最新設定，請檢查後再重試。",
-      "groupedKeysTitle": "分組金鑰",
-      "groupedKeysHint": "平台建立 Key 時可能需要選擇分組,這裡每個分組金鑰只管理一個協議,模型也只從該協議拉取。",
-      "groupedKey": "分組金鑰 #{{index}}",
-      "addGroupedKey": "新增分組金鑰",
-      "removeGroupedKey": "刪除分組金鑰",
-      "protocol": "分組/協議",
-      "protocolHint": "請選擇此 Key 對應的分組/協議。",
-      "protocolEndpoint": "目前協議位址",
-      "urlMode": "{{provider}} URL",
-      "urlHint": "不同 URL 的使用規範一致,儲存時只會寫入目前分組協議對應位址。",
-      "urlOptions": {
-        "standard": "普通 URL",
-        "direct": "專線直連 URL",
-        "domestic": "中國大陸線路",
-        "overseas": "海外線路"
-      },
-      "urlOptionDescriptions": {
-        "domestic": "面向中國大陸使用者和部署在中國大陸網路環境中的業務，通常可獲得更低延遲。",
-        "overseas": "面向海外部署、跨境存取或需要存取境外模型的業務。"
-      },
-      "modelsTitle": "協議模型設定",
-      "modelsHint": "可分別限制或別名映射 Codex API、Anthropic、Gemini 與 OpenAI 相容入口的模型。",
-      "protocolModels": {
-        "codex": "Codex API 模型",
-        "anthropic": "Anthropic 模型",
-        "gemini": "Gemini 模型",
-        "openai": "OpenAI 相容模型"
-      },
-      "protocolModelHints": {
-        "codex": "寫入 Codex API 設定的 models,可從 /v1/models 拉取後設定別名。",
-        "anthropic": "寫入 Anthropic 設定的 models,可從 /v1/models 拉取後設定別名。",
-        "gemini": "寫入 Gemini 設定的 models,可從 /v1beta/models 拉取後設定別名。",
-        "openai": "寫入 OpenAI 相容設定的 models,可從 /models 拉取後設定別名。"
-      },
-      "validation": {
-        "keyRequired": "請為每個分組金鑰填寫 API Key。",
-        "protocolDuplicate": "每個協議只能新增一個分組金鑰。"
-      },
-      "openaiEntries": "OpenAI 相容金鑰數",
-      "codexEntries": "Codex API 金鑰數",
-      "anthropicEntries": "Anthropic 金鑰數",
-      "geminiEntries": "Gemini 金鑰數",
-      "protocols": {
-        "anthropic": "Anthropic",
-        "openai": "OpenAI 相容",
-        "gemini": "Gemini",
-        "codexResponses": "Codex API (Responses)"
-      }
-    },
-    "status": {
-      "active": "活躍",
-      "disabled": "已停用",
-      "notSet": "未設定",
-      "none": "無",
-      "notConfigured": "未設定",
-      "defaultSuffix": "(預設)"
-    },
-    "detail": {
-      "title": "詳情",
-      "metadataTitle": "元資料",
-      "fields": {
-        "identifier": "識別碼",
-        "baseUrl": "服務位址",
-        "proxyUrl": "代理 URL",
-        "prefix": "前綴",
-        "models": "模型數",
-        "headers": "請求標頭數",
-        "authIndex": "Auth Index",
-        "excludedModels": "排除模型數",
-        "apiKeyEntries": "金鑰條目數"
-      }
-    },
-    "form": {
-      "createEyebrow": "新增",
-      "editEyebrow": "編輯",
-      "name": "名稱",
-      "apiKey": "API 金鑰",
-      "apiKeyCreatePlaceholder": "輸入 API 金鑰",
-      "apiKeyEditPlaceholder": "留空表示不修改",
-      "baseUrl": "服務位址",
-      "baseUrlRequiredHint": "此提供商需要填寫服務位址",
-      "proxyUrl": "代理 URL",
-      "prefix": "前綴",
-      "priority": "優先級",
-      "disabled": "停用此條目",
-      "disabledHint": "停用後不會被閘道使用",
-      "websockets": "啟用 WebSockets",
-      "testModel": "測試模型",
-      "testModelClaudeHint": "僅用於連通性測試,不會被儲存",
-      "testModelAutoWith": "自動 · {{name}}",
-      "testModelAutoEmpty": "自動(尚未新增模型)",
-      "testModelCustom": "{{name}}(自訂)",
-      "modelsSection": "自訂模型",
-      "addModel": "新增模型",
-      "headersSection": "請求標頭",
-      "addHeader": "新增請求標頭",
-      "excludedSection": "排除模型",
-      "excludedHint": "每行一個模型名稱,匹配後將不會被路由到此提供商",
-      "cloakSection": "Cloak 設定",
-      "cloakMode": "模式",
-      "cloakStrict": "嚴格模式",
-      "cloakSensitiveWords": "敏感詞(每行一個)",
-      "apiKeyEntriesSection": "API 金鑰條目",
-      "apiKeyEntry": "金鑰 #{{index}}",
-      "addApiKeyEntry": "新增金鑰條目",
-      "showApiKey": "顯示金鑰",
-      "hideApiKey": "隱藏金鑰",
-      "disableCooling": "停用冷卻調度",
-      "disableCoolingHint": "僅對目前憑證或提供商停用失敗後的冷卻視窗",
-      "modelImage": "允許圖片端點",
-      "modelImageHint": "允許該模型用於 /v1/images/generations 和 /v1/images/edits",
-      "showAllEntries": "顯示全部（{{count}}）",
-      "showFewerEntries": "收起",
-      "proxyBadge": "代理",
-      "modelBadgeImage": "圖片",
-      "modelBadgeThinking": "Thinking",
-      "thinkingConfig": "Thinking 設定(JSON)",
-      "thinkingConfigHint": "可設定 levels、min、max、zero_allowed、dynamic_allowed",
-      "cloakCacheUserId": "快取 user_id",
-      "cloakCacheUserIdHint": "按 API key 複用 Claude cloak 產生的 user_id",
-      "experimentalCchSigning": "實驗性 CCH 簽名",
-      "experimentalCchSigningHint": "對 cloaked Claude /v1/messages 最終請求體啟用 CCH 簽名",
-      "validation": {
-        "nameRequired": "名稱必填",
-        "apiKeyRequired": "至少填寫一個 API 金鑰",
-        "baseUrlRequired": "服務位址必填"
-      }
-    },
-    "delete": {
-      "title": "刪除資源",
-      "confirm": "確定要刪除 {{name}} 嗎?此操作不可復原。"
-    },
-    "toast": {
-      "created": "建立成功",
-      "updated": "更新成功",
-      "deleted": "刪除成功",
-      "enabled": "已啟用",
-      "disabled": "已停用",
-      "toggleFailed": "更新狀態失敗"
-    },
-    "unsavedChanges": {
-      "title": "確定捨棄未儲存的變更嗎?",
-      "message": "目前表單還有尚未儲存的變更,關閉後會遺失。",
-      "discard": "捨棄變更",
-      "keepEditing": "繼續編輯"
-    },
-    "connectivity": {
-      "test": "測試",
-      "testAll": "全部測試",
-      "success": "連通",
-      "baseUrlRequired": "服務位址必填",
-      "endpointInvalid": "服務位址不合法",
-      "apiKeyRequired": "API 金鑰必填",
-      "modelRequired": "測試模型必填",
-      "timeout": "請求超過 {{seconds}} 秒",
-      "requestFailed": "請求失敗"
-    },
-    "discovery": {
-      "openButton": "從端點拉取",
-      "searchPlaceholder": "搜尋模型",
-      "reload": "重新載入",
-      "loading": "正在載入模型…",
-      "empty": "端點未回傳任何模型",
-      "notLoaded": "點擊重新載入以取得模型",
-      "selectAll": "全選",
-      "clearAll": "清空選擇",
-      "selectedCount": "{{selected}} / {{total}}",
-      "alreadyAdded": "已新增",
-      "close": "關閉",
-      "apply": "套用 ({{count}})"
-    },
-    "toolbar": {
-      "sortBy": "排序",
-      "sort": {
-        "name": "名稱",
-        "priority": "優先級",
-        "recentSuccess": "近期成功數",
-        "directionAsc": "升序",
-        "directionDesc": "降序"
-      },
-      "filter": {
-        "allModels": "全部模型",
-        "selectedModels": "{{selected}}/{{total}} 個模型",
-        "selectAll": "全選",
-        "clear": "清空",
-        "empty": "尚無已設定模型"
-      }
-    },
-    "modelCatalog": {
-      "notLoaded": "未載入"
-    }
   }
 }

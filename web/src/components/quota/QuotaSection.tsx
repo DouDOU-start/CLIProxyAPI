@@ -23,7 +23,7 @@ import { useQuotaLoader } from './useQuotaLoader';
 import type { QuotaConfig } from './quotaConfigs';
 import { useGridColumns } from './useGridColumns';
 import { IconRefreshCw } from '@/components/ui/icons';
-import styles from '@/pages/QuotaPage.module.scss';
+import styles from '@/features/authFiles/components/AuthFilesQuotaPanel.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 

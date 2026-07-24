@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { animate } from 'motion/mini';
 import type { AnimationPlaybackControlsWithThen } from 'motion-dom';
 import { useInterval } from '@/hooks/useInterval';
@@ -21,7 +21,12 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { IconFilterAll, IconSearch } from '@/components/ui/icons';
+import {
+  IconFilterAll,
+  IconSearch,
+  IconSidebarAuthFiles,
+  IconSidebarQuota,
+} from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { AuthFilesStatusFilterCard } from '@/features/authFiles/components/AuthFilesStatusFilterCard';
@@ -44,6 +49,7 @@ import {
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
 import { AuthFilesPrefixProxyEditorModal } from '@/features/authFiles/components/AuthFilesPrefixProxyEditorModal';
+import { AuthFilesQuotaPanel } from '@/features/authFiles/components/AuthFilesQuotaPanel';
 import { OAuthExcludedCard } from '@/features/authFiles/components/OAuthExcludedCard';
 import { OAuthModelAliasCard } from '@/features/authFiles/components/OAuthModelAliasCard';
 import { useAuthFilesData } from '@/features/authFiles/hooks/useAuthFilesData';
@@ -70,6 +76,71 @@ const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
+type AuthFilesTab = 'credentials' | 'quota';
+
+export function AuthFilesPage() {
+  const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<AuthFilesTab>(() =>
+    searchParams.get('tab') === 'quota' ? 'quota' : 'credentials'
+  );
+
+  const selectTab = (tab: AuthFilesTab) => {
+    setActiveTab(tab);
+    if (typeof window === 'undefined') return;
+
+    const nextUrl = new URL(window.location.href);
+    const hashPath = nextUrl.hash.split('?')[0];
+    nextUrl.hash = tab === 'quota' ? `${hashPath}?tab=quota` : hashPath;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  };
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.workspaceHeader}>
+        <div className={styles.pageHeader}>
+          <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
+          <p className={styles.description}>{t('auth_files.description')}</p>
+        </div>
+
+        <div className={styles.tabList} role="tablist" aria-label={t('auth_files.tabs.label')}>
+          <button
+            id="auth-files-tab-credentials"
+            className={`${styles.tabButton} ${activeTab === 'credentials' ? styles.tabButtonActive : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'credentials'}
+            aria-controls="auth-files-panel-credentials"
+            onClick={() => selectTab('credentials')}
+          >
+            <IconSidebarAuthFiles size={16} />
+            <span>{t('auth_files.tabs.credentials')}</span>
+          </button>
+          <button
+            id="auth-files-tab-quota"
+            className={`${styles.tabButton} ${activeTab === 'quota' ? styles.tabButtonActive : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'quota'}
+            aria-controls="auth-files-panel-quota"
+            onClick={() => selectTab('quota')}
+          >
+            <IconSidebarQuota size={16} />
+            <span>{t('auth_files.tabs.quota')}</span>
+          </button>
+        </div>
+      </div>
+
+      <div
+        id={`auth-files-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`auth-files-tab-${activeTab}`}
+      >
+        {activeTab === 'credentials' ? <AuthFilesCredentialsPanel /> : <AuthFilesQuotaPanel />}
+      </div>
+    </div>
+  );
+}
 
 const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -93,7 +164,7 @@ const normalizePersistedStatusFilterMode = (value: unknown): AuthFilesStatusFilt
   return isAuthFilesStatusFilterMode(value) ? value : null;
 };
 
-export function AuthFilesPage() {
+function AuthFilesCredentialsPanel() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
@@ -679,12 +750,7 @@ export function AuthFilesPage() {
   })();
 
   return (
-    <div className={styles.container}>
-      <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>{t('auth_files.title')}</h1>
-        <p className={styles.description}>{t('auth_files.description')}</p>
-      </div>
-
+    <div className={styles.viewContent}>
       <Card
         title={titleNode}
         extra={

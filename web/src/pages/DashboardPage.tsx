@@ -3,15 +3,12 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   IconKey,
-  IconBot,
   IconFileText,
   IconSatellite,
-  IconSidebarQuickStart,
 } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
 import { useApiKeysForModels } from '@/hooks/useApiKeysForModels';
-import { hasApiKeyFunConfig } from '@/features/providers/sponsor';
 import { formatDateValue } from '@/utils/format';
 import { getDashboardModelsStatValue } from '@/utils/dashboard';
 import styles from './DashboardPage.module.scss';
@@ -111,20 +108,6 @@ export function DashboardPage() {
   }, [connectionStatus, fetchConfig, fetchModels]);
 
   const configLoading = !config;
-  const providerStats = config
-    ? {
-        gemini: config.geminiApiKeys?.length ?? 0,
-        codex: config.codexApiKeys?.length ?? 0,
-        xai: config.xaiApiKeys?.length ?? 0,
-        claude: config.claudeApiKeys?.length ?? 0,
-        vertex: config.vertexApiKeys?.length ?? 0,
-        openai: config.openaiCompatibility?.length ?? 0,
-      }
-    : null;
-  const totalProviderKeys = providerStats
-    ? Object.values(providerStats).reduce((sum, count) => sum + count, 0)
-    : 0;
-  const isApiKeyFunConfigured = hasApiKeyFunConfig(config);
 
   const quickStats: QuickStat[] = [
     {
@@ -134,23 +117,6 @@ export function DashboardPage() {
       path: '/config',
       loading: configLoading,
       sublabel: t('nav.config_management'),
-    },
-    {
-      label: t('nav.ai_providers'),
-      value: providerStats ? totalProviderKeys : '-',
-      icon: <IconBot size={24} />,
-      path: '/ai-providers',
-      loading: configLoading,
-      sublabel: providerStats
-        ? t('dashboard.provider_keys_detail', {
-            gemini: providerStats.gemini,
-            codex: providerStats.codex,
-            xai: providerStats.xai,
-            claude: providerStats.claude,
-            vertex: providerStats.vertex,
-            openai: providerStats.openai,
-          })
-        : undefined,
     },
     {
       label: t('nav.auth_files'),
@@ -168,17 +134,6 @@ export function DashboardPage() {
       loading: modelsLoading,
       sublabel: t('dashboard.available_models_desc'),
     },
-    ...(!isApiKeyFunConfigured
-      ? [
-          {
-            label: t('dashboard.quick_start_card'),
-            value: t('dashboard.quick_start_entry'),
-            icon: <IconSidebarQuickStart size={24} />,
-            path: '/quick-start',
-            sublabel: t('dashboard.quick_start_entry_desc'),
-          },
-        ]
-      : []),
   ];
 
   const routingStrategyRaw = config?.routingStrategy?.trim() || '';

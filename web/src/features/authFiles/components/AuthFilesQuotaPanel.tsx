@@ -1,6 +1,4 @@
-/**
- * Quota management page - coordinates the three quota sections.
- */
+/** Coordinates quota sections inside the auth files workspace. */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,9 +14,9 @@ import {
   XAI_CONFIG,
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
-import styles from './QuotaPage.module.scss';
+import styles from './AuthFilesQuotaPanel.module.scss';
 
-export function QuotaPage() {
+export function AuthFilesQuotaPanel() {
   const { t } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
 
@@ -50,8 +48,8 @@ export function QuotaPage() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.pageHeader}>
-        <h1 className={styles.pageTitle}>{t('quota_management.title')}</h1>
+      <div className={styles.viewHeader}>
+        <h2 className={styles.viewTitle}>{t('quota_management.title')}</h2>
         <p className={styles.description}>{t('quota_management.description')}</p>
       </div>
 

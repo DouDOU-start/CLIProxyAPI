@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { IconRefreshCw } from '@/components/ui/icons';
 import type { AuthFileItem, ResolvedTheme, ThemeColors } from '@/types';
 import { TYPE_COLORS } from '@/utils/quota';
-import styles from '@/pages/QuotaPage.module.scss';
+import styles from '@/features/authFiles/components/AuthFilesQuotaPanel.module.scss';
 
 type QuotaStatus = 'idle' | 'loading' | 'success' | 'error';
 

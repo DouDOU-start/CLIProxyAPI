@@ -88,7 +88,7 @@ import {
 import { normalizeAuthIndex } from '@/utils/authIndex';
 import { formatDateTimeValue } from '@/utils/format';
 import type { QuotaRenderHelpers } from './QuotaCard';
-import styles from '@/pages/QuotaPage.module.scss';
+import styles from '@/features/authFiles/components/AuthFilesQuotaPanel.module.scss';
 
 type QuotaUpdater<T> = T | ((prev: T) => T);
 
