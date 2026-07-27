@@ -8,7 +8,7 @@ export * from './apiKeys';
 export * from './authFiles';
 export * from './oauth';
 export * from './logs';
-export * from './version';
+export * from './runtime';
 export * from './models';
 export * from './usageCosts';
 export * from './plugins';

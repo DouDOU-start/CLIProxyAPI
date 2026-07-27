@@ -5,7 +5,7 @@ import { apiClient } from '@/services/api/client';
 import { obfuscatedStorage } from '@/services/storage/secureStorage';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
-import { versionApi } from '@/services/api/version';
+import { runtimeApi } from '@/services/api/runtime';
 import { useConfigStore } from './useConfigStore';
 import { useModelsStore } from './useModelsStore';
 import { useQuotaStore } from './useQuotaStore';
@@ -17,11 +17,6 @@ interface AuthStoreState extends AuthState {
   checkAuth: () => Promise<boolean>;
   restoreSession: () => Promise<boolean>;
   expireSession: () => void;
-  updateServerVersion: (
-    version: string | null,
-    buildDate?: string | null,
-    runtimeKind?: ServerRuntimeKind | null
-  ) => void;
   updateServerRuntimeKind: (runtimeKind: ServerRuntimeKind) => void;
   updateServerPluginSupport: (supportsPlugin: boolean) => void;
 }
@@ -32,7 +27,7 @@ const currentApiBase = () => normalizeApiBase(detectApiBaseFromLocation());
 
 const detectRuntimeKind = async (): Promise<ServerRuntimeKind> => {
   try {
-    return await versionApi.detectRuntimeKind();
+    return await runtimeApi.detectRuntimeKind();
   } catch (error) {
     console.warn('Runtime kind detection failed:', error);
     return 'unknown';
@@ -53,8 +48,6 @@ export const useAuthStore = create<AuthStoreState>()(
       email: '',
       csrfToken: '',
       rememberSession: false,
-      serverVersion: null,
-      serverBuildDate: null,
       serverRuntimeKind: 'unknown',
       supportsPlugin: false,
       connectionStatus: 'disconnected',
@@ -67,8 +60,6 @@ export const useAuthStore = create<AuthStoreState>()(
           isAuthenticated: false,
           apiBase: currentApiBase(),
           csrfToken: '',
-          serverVersion: null,
-          serverBuildDate: null,
           serverRuntimeKind: 'unknown',
           supportsPlugin: false,
           connectionStatus: 'disconnected',
@@ -116,8 +107,6 @@ export const useAuthStore = create<AuthStoreState>()(
 
         set({
           connectionStatus: 'connecting',
-          serverVersion: null,
-          serverBuildDate: null,
           serverRuntimeKind: 'unknown',
           supportsPlugin: false,
         });
@@ -185,14 +174,6 @@ export const useAuthStore = create<AuthStoreState>()(
         }
       },
 
-      updateServerVersion: (version, buildDate, runtimeKind) => {
-        set((state) => ({
-          serverVersion: version || null,
-          serverBuildDate: buildDate || null,
-          serverRuntimeKind: runtimeKind || state.serverRuntimeKind,
-        }));
-      },
-
       updateServerRuntimeKind: (runtimeKind) => {
         set({ serverRuntimeKind: runtimeKind });
       },
@@ -218,8 +199,6 @@ export const useAuthStore = create<AuthStoreState>()(
       partialize: (state) => ({
         email: state.email,
         rememberSession: state.rememberSession,
-        serverVersion: state.serverVersion,
-        serverBuildDate: state.serverBuildDate,
         serverRuntimeKind: state.serverRuntimeKind,
       }),
     }
@@ -230,15 +209,6 @@ if (typeof window !== 'undefined') {
   window.addEventListener('unauthorized', () => {
     useAuthStore.getState().expireSession();
   });
-
-  window.addEventListener('server-version-update', ((event: CustomEvent) => {
-    const detail = event.detail || {};
-    const runtimeKind =
-      detail.runtimeKind === 'cpa' || detail.runtimeKind === 'home' ? detail.runtimeKind : null;
-    useAuthStore
-      .getState()
-      .updateServerVersion(detail.version || null, detail.buildDate || null, runtimeKind);
-  }) as EventListener);
 
   window.addEventListener('server-plugin-support-update', ((event: CustomEvent) => {
     useAuthStore.getState().updateServerPluginSupport(event.detail?.supportsPlugin === true);

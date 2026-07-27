@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { IconKey, IconFileText, IconSatellite } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
 import { authFilesApi } from '@/services/api';
-import { formatDateValue } from '@/utils/format';
 import { getDashboardModelsStatValue } from '@/utils/dashboard';
 import styles from './DashboardPage.module.scss';
 
@@ -30,8 +29,6 @@ function getTimeOfDay(): TimeOfDay {
 export function DashboardPage() {
   const { t, i18n } = useTranslation();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
-  const serverVersion = useAuthStore((state) => state.serverVersion);
-  const serverBuildDate = useAuthStore((state) => state.serverBuildDate);
   const apiBase = useAuthStore((state) => state.apiBase);
   const config = useConfigStore((state) => state.config);
   const fetchConfig = useConfigStore((state) => state.fetchConfig);
@@ -158,8 +155,6 @@ export function DashboardPage() {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const serverBuildDateDisplay = formatDateValue(serverBuildDate, i18n.language);
-
   return (
     <div className={styles.dashboard}>
       {/* Decorative background orbs */}
@@ -194,20 +189,15 @@ export function DashboardPage() {
               }`}
             />
             <span className={styles.pillText}>
-              {serverVersion
-                ? `v${serverVersion.trim().replace(/^[vV]+/, '')}`
-                : t(
-                    connectionStatus === 'connected'
-                      ? 'common.connected'
-                      : connectionStatus === 'connecting'
-                        ? 'common.connecting'
-                        : 'common.disconnected'
-                  )}
+              {t(
+                connectionStatus === 'connected'
+                  ? 'common.connected'
+                  : connectionStatus === 'connecting'
+                    ? 'common.connecting'
+                    : 'common.disconnected'
+              )}
             </span>
           </div>
-          {serverBuildDateDisplay && (
-            <span className={styles.buildDate}>{serverBuildDateDisplay}</span>
-          )}
         </div>
       </section>
 

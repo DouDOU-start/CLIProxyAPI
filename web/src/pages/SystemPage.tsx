@@ -4,7 +4,6 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import { IconGithub, IconBookOpen, IconExternalLink, IconCode } from '@/components/ui/icons';
 import {
   useAuthStore,
   useConfigStore,
@@ -12,8 +11,7 @@ import {
   useModelsStore,
   useThemeStore,
 } from '@/stores';
-import { configApi, versionApi } from '@/services/api';
-import { formatDateTimeValue } from '@/utils/format';
+import { configApi } from '@/services/api';
 import { classifyModels } from '@/utils/models';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
@@ -43,32 +41,6 @@ const MODEL_CATEGORY_ICONS: Record<string, string | { light: string; dark: strin
   minimax: iconMinimax,
 };
 
-const parseVersionSegments = (version?: string | null) => {
-  if (!version) return null;
-  const cleaned = version.trim().replace(/^v/i, '');
-  if (!cleaned) return null;
-  const parts = cleaned
-    .split(/[^0-9]+/)
-    .filter(Boolean)
-    .map((segment) => Number.parseInt(segment, 10))
-    .filter(Number.isFinite);
-  return parts.length ? parts : null;
-};
-
-const compareVersions = (latest?: string | null, current?: string | null) => {
-  const latestParts = parseVersionSegments(latest);
-  const currentParts = parseVersionSegments(current);
-  if (!latestParts || !currentParts) return null;
-  const length = Math.max(latestParts.length, currentParts.length);
-  for (let i = 0; i < length; i++) {
-    const l = latestParts[i] || 0;
-    const c = currentParts[i] || 0;
-    if (l > c) return 1;
-    if (l < c) return -1;
-  }
-  return 0;
-};
-
 export function SystemPage() {
   const { t, i18n } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
@@ -92,10 +64,8 @@ export function SystemPage() {
   const [requestLogDraft, setRequestLogDraft] = useState(false);
   const [requestLogTouched, setRequestLogTouched] = useState(false);
   const [requestLogSaving, setRequestLogSaving] = useState(false);
-  const [checkingVersion, setCheckingVersion] = useState(false);
-
-  const versionTapCount = useRef(0);
-  const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aboutTapCount = useRef(0);
+  const aboutTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const otherLabel = useMemo(
     () => (i18n.language?.toLowerCase().startsWith('zh') ? '其他' : 'Other'),
@@ -105,11 +75,6 @@ export function SystemPage() {
   const requestLogEnabled = config?.requestLog ?? false;
   const requestLogDirty = requestLogDraft !== requestLogEnabled;
   const canEditRequestLog = auth.connectionStatus === 'connected' && Boolean(config);
-
-  const appVersion = __APP_VERSION__ || t('system_info.version_unknown');
-  const apiVersion = auth.serverVersion || t('system_info.version_unknown');
-  const buildTime =
-    formatDateTimeValue(auth.serverBuildDate, i18n.language) || t('system_info.version_unknown');
 
   const getIconForCategory = (categoryId: string): string | null => {
     const iconEntry = MODEL_CATEGORY_ICONS[categoryId];
@@ -172,22 +137,22 @@ export function SystemPage() {
     setRequestLogModalOpen(true);
   }, [requestLogEnabled]);
 
-  const handleInfoVersionTap = useCallback(() => {
-    versionTapCount.current += 1;
-    if (versionTapTimer.current) {
-      clearTimeout(versionTapTimer.current);
+  const handleAboutTap = useCallback(() => {
+    aboutTapCount.current += 1;
+    if (aboutTapTimer.current) {
+      clearTimeout(aboutTapTimer.current);
     }
 
-    if (versionTapCount.current >= 7) {
-      versionTapCount.current = 0;
-      versionTapTimer.current = null;
+    if (aboutTapCount.current >= 7) {
+      aboutTapCount.current = 0;
+      aboutTapTimer.current = null;
       openRequestLogModal();
       return;
     }
 
-    versionTapTimer.current = setTimeout(() => {
-      versionTapCount.current = 0;
-      versionTapTimer.current = null;
+    aboutTapTimer.current = setTimeout(() => {
+      aboutTapCount.current = 0;
+      aboutTapTimer.current = null;
     }, 1500);
   }, [openRequestLogModal]);
 
@@ -225,39 +190,6 @@ export function SystemPage() {
     }
   };
 
-  const handleVersionCheck = useCallback(async () => {
-    setCheckingVersion(true);
-    try {
-      const data = await versionApi.checkLatest();
-      const latestRaw = data?.['latest-version'] ?? data?.latest_version ?? data?.latest ?? '';
-      const latest = typeof latestRaw === 'string' ? latestRaw : String(latestRaw ?? '');
-      const comparison = compareVersions(latest, auth.serverVersion);
-
-      if (!latest) {
-        showNotification(t('system_info.version_check_error'), 'error');
-        return;
-      }
-
-      if (comparison === null) {
-        showNotification(t('system_info.version_current_missing'), 'warning');
-        return;
-      }
-
-      if (comparison > 0) {
-        showNotification(t('system_info.version_update_available', { version: latest }), 'warning');
-      } else {
-        showNotification(t('system_info.version_is_latest'), 'success');
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-      const suffix = message ? `: ${message}` : '';
-      showNotification(`${t('system_info.version_check_error')}${suffix}`, 'error');
-    } finally {
-      setCheckingVersion(false);
-    }
-  }, [auth.serverVersion, showNotification, t]);
-
   useEffect(() => {
     fetchConfig().catch(() => {
       // ignore
@@ -272,8 +204,8 @@ export function SystemPage() {
 
   useEffect(() => {
     return () => {
-      if (versionTapTimer.current) {
-        clearTimeout(versionTapTimer.current);
+      if (aboutTapTimer.current) {
+        clearTimeout(aboutTapTimer.current);
       }
     };
   }, []);
@@ -288,112 +220,15 @@ export function SystemPage() {
       <h1 className={styles.pageTitle}>{t('system_info.title')}</h1>
       <div className={styles.content}>
         <Card className={styles.aboutCard}>
-          <div className={styles.aboutHeader}>
+          <button
+            type="button"
+            className={styles.aboutHeader}
+            onClick={handleAboutTap}
+            aria-label={t('system_info.about_title')}
+          >
             <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.aboutLogo} />
             <div className={styles.aboutTitle}>{t('system_info.about_title')}</div>
-          </div>
-
-          <div className={styles.aboutInfoGrid}>
-            <button
-              type="button"
-              className={`${styles.infoTile} ${styles.tapTile}`}
-              onClick={handleInfoVersionTap}
-            >
-              <div className={styles.tileHeader}>
-                <div className={styles.tileLabel}>{t('footer.version')}</div>
-              </div>
-              <div className={styles.tileValue}>{appVersion}</div>
-            </button>
-
-            <div className={styles.infoTile}>
-              <div className={styles.tileHeader}>
-                <div className={styles.tileLabel}>{t('footer.api_version')}</div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={styles.tileAction}
-                  onClick={() => void handleVersionCheck()}
-                  loading={checkingVersion}
-                  title={t('system_info.version_check_button')}
-                  aria-label={t('system_info.version_check_button')}
-                >
-                  {t('system_info.version_check_button')}
-                </Button>
-              </div>
-              <div className={styles.tileValue}>{apiVersion}</div>
-            </div>
-
-            <div className={styles.infoTile}>
-              <div className={styles.tileLabel}>{t('footer.build_date')}</div>
-              <div className={styles.tileValue}>{buildTime}</div>
-            </div>
-
-            <div className={styles.infoTile}>
-              <div className={styles.tileLabel}>{t('connection.status')}</div>
-              <div className={styles.tileValue}>{t(`common.${auth.connectionStatus}_status`)}</div>
-              <div className={styles.tileSub}>{auth.apiBase || '-'}</div>
-            </div>
-          </div>
-        </Card>
-
-        <Card title={t('system_info.quick_links_title')}>
-          <p className={styles.sectionDescription}>{t('system_info.quick_links_desc')}</p>
-          <div className={styles.quickLinks}>
-            <a
-              href="https://github.com/router-for-me/CLIProxyAPI"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.linkCard}
-            >
-              <div className={`${styles.linkIcon} ${styles.github}`}>
-                <IconGithub size={22} />
-              </div>
-              <div className={styles.linkContent}>
-                <div className={styles.linkTitle}>
-                  {t('system_info.link_main_repo')}
-                  <IconExternalLink size={14} />
-                </div>
-                <div className={styles.linkDesc}>{t('system_info.link_main_repo_desc')}</div>
-              </div>
-            </a>
-
-            <a
-              href="https://github.com/router-for-me/Cli-Proxy-API-Management-Center"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.linkCard}
-            >
-              <div className={`${styles.linkIcon} ${styles.github}`}>
-                <IconCode size={22} />
-              </div>
-              <div className={styles.linkContent}>
-                <div className={styles.linkTitle}>
-                  {t('system_info.link_webui_repo')}
-                  <IconExternalLink size={14} />
-                </div>
-                <div className={styles.linkDesc}>{t('system_info.link_webui_repo_desc')}</div>
-              </div>
-            </a>
-
-            <a
-              href="https://help.router-for.me/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.linkCard}
-            >
-              <div className={`${styles.linkIcon} ${styles.docs}`}>
-                <IconBookOpen size={22} />
-              </div>
-              <div className={styles.linkContent}>
-                <div className={styles.linkTitle}>
-                  {t('system_info.link_docs')}
-                  <IconExternalLink size={14} />
-                </div>
-                <div className={styles.linkDesc}>{t('system_info.link_docs_desc')}</div>
-              </div>
-            </a>
-          </div>
+          </button>
         </Card>
 
         <Card

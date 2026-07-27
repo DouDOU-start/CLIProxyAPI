@@ -17,8 +17,6 @@ export interface AuthState {
   email: string;
   csrfToken: string;
   rememberSession: boolean;
-  serverVersion: string | null;
-  serverBuildDate: string | null;
   serverRuntimeKind: ServerRuntimeKind;
   supportsPlugin: boolean;
 }

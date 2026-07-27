@@ -1158,6 +1158,20 @@ func TestManagementUsageCostsRequiresManagementAuth(t *testing.T) {
 	}
 }
 
+func TestManagementLatestVersionRouteIsUnavailable(t *testing.T) {
+	configureManagementAuth(t)
+	server := newTestServer(t)
+	cookie, csrfToken := managementSessionForTest(t, server)
+
+	request := httptest.NewRequest(http.MethodGet, "/v0/management/latest-version", nil)
+	addManagementSession(request, cookie, csrfToken)
+	recorder := httptest.NewRecorder()
+	server.engine.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("latest version status = %d, want %d body=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+}
+
 func TestManagementPluginsRouteRegistered(t *testing.T) {
 	configureManagementAuth(t)
 

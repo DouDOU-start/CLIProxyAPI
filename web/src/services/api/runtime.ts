@@ -1,14 +1,8 @@
-/**
- * 版本相关 API
- */
-
 import { apiClient } from './client';
 import type { ServerRuntimeKind } from '@/types';
 import { isRecord } from '@/utils/helpers';
 
-export const versionApi = {
-  checkLatest: () => apiClient.get<Record<string, unknown>>('/latest-version'),
-
+export const runtimeApi = {
   async detectRuntimeKind(): Promise<ServerRuntimeKind> {
     try {
       const data = await apiClient.get('/nodes');

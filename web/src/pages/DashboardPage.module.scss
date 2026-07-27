@@ -254,16 +254,6 @@
   color: var(--text-primary);
 }
 
-.buildDate {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-align: right;
-
-  @media (max-width: $breakpoint-mobile) {
-    text-align: left;
-  }
-}
-
 // ─── Bento Stats Grid ───────────────────────────────────
 
 .statsSection {
