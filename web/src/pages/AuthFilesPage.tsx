@@ -21,9 +21,17 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { IconFilterAll, IconSearch } from '@/components/ui/icons';
+import { IconFilterAll, IconRefreshCw, IconSearch } from '@/components/ui/icons';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import {
+  ANTIGRAVITY_CONFIG,
+  CLAUDE_CONFIG,
+  CODEX_CONFIG,
+  KIMI_CONFIG,
+  XAI_CONFIG,
+  useQuotaLoader,
+} from '@/components/quota';
 import { AuthFilesStatusFilterCard } from '@/features/authFiles/components/AuthFilesStatusFilterCard';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
@@ -51,6 +59,11 @@ import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAut
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { useAuthFilesUsageCosts } from '@/features/authFiles/hooks/useAuthFilesUsageCosts';
 import {
+  canRequestAuthFileQuota,
+  resolveAuthFileQuotaType,
+} from '@/features/authFiles/quotaVisibility';
+import { compareAuthFilesByImportTime } from '@/features/authFiles/sorting';
+import {
   isAuthFilesStatusFilterMode,
   isAuthFilesSortMode,
   readAuthFilesUiState,
@@ -60,7 +73,7 @@ import {
   type AuthFilesStatusFilterMode,
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
-import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
+import { useAuthStore, useNotificationStore, useQuotaStore, useThemeStore } from '@/stores';
 import { normalizeRecentRequestAuthIndex } from '@/utils/recentRequests';
 import styles from './AuthFilesPage.module.scss';
 
@@ -70,6 +83,7 @@ const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 const DEFAULT_REGULAR_PAGE_SIZE = 9;
 const DEFAULT_COMPACT_PAGE_SIZE = 12;
+const ignoreQuotaLoadingState = () => {};
 
 const escapeWildcardSearchSegment = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -114,6 +128,7 @@ export function AuthFilesPage() {
   const [pageSizeInput, setPageSizeInput] = useState('9');
   const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
   const [sortMode, setSortMode] = useState<AuthFilesSortMode>('default');
+  const [refreshingAllCredentials, setRefreshingAllCredentials] = useState(false);
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const [uiStateHydrated, setUiStateHydrated] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
@@ -151,6 +166,12 @@ export function AuthFilesPage() {
 
   const statusBarCache = useAuthFilesStatusBarCache(files);
   const { usageByAuthIndex, status: usageCostsStatus, loadUsageCosts } = useAuthFilesUsageCosts();
+  const clearQuotaCache = useQuotaStore((state) => state.clearQuotaCache);
+  const { loadQuota: loadAntigravityQuota } = useQuotaLoader(ANTIGRAVITY_CONFIG);
+  const { loadQuota: loadClaudeQuota } = useQuotaLoader(CLAUDE_CONFIG);
+  const { loadQuota: loadCodexQuota } = useQuotaLoader(CODEX_CONFIG);
+  const { loadQuota: loadKimiQuota } = useQuotaLoader(KIMI_CONFIG);
+  const { loadQuota: loadXaiQuota } = useQuotaLoader(XAI_CONFIG);
 
   const {
     excluded,
@@ -355,6 +376,50 @@ export function AuthFilesPage() {
     await Promise.all([loadFiles(), loadExcluded(), loadModelAlias(), loadUsageCosts()]);
   }, [loadFiles, loadExcluded, loadModelAlias, loadUsageCosts]);
 
+  const handleRefreshAllCredentials = useCallback(async () => {
+    if (disableControls || refreshingAllCredentials) return;
+
+    const targets = {
+      antigravity: [] as typeof files,
+      claude: [] as typeof files,
+      codex: [] as typeof files,
+      kimi: [] as typeof files,
+      xai: [] as typeof files,
+    };
+
+    files.forEach((file) => {
+      if (!canRequestAuthFileQuota(file, disableControls)) return;
+      const quotaType = resolveAuthFileQuotaType(file);
+      if (quotaType) targets[quotaType].push(file);
+    });
+
+    setRefreshingAllCredentials(true);
+    clearQuotaCache();
+    try {
+      await Promise.all([
+        handleHeaderRefresh(),
+        loadAntigravityQuota(targets.antigravity, ignoreQuotaLoadingState),
+        loadClaudeQuota(targets.claude, ignoreQuotaLoadingState),
+        loadCodexQuota(targets.codex, ignoreQuotaLoadingState),
+        loadKimiQuota(targets.kimi, ignoreQuotaLoadingState),
+        loadXaiQuota(targets.xai, ignoreQuotaLoadingState),
+      ]);
+    } finally {
+      setRefreshingAllCredentials(false);
+    }
+  }, [
+    clearQuotaCache,
+    disableControls,
+    files,
+    handleHeaderRefresh,
+    loadAntigravityQuota,
+    loadClaudeQuota,
+    loadCodexQuota,
+    loadKimiQuota,
+    loadXaiQuota,
+    refreshingAllCredentials,
+  ]);
+
   useHeaderRefresh(handleHeaderRefresh);
 
   useEffect(() => {
@@ -408,6 +473,8 @@ export function AuthFilesPage() {
       { value: 'default', label: t('auth_files.sort_default') },
       { value: 'az', label: t('auth_files.sort_az') },
       { value: 'priority', label: t('auth_files.sort_priority') },
+      { value: 'import_desc', label: t('auth_files.sort_import_desc') },
+      { value: 'import_asc', label: t('auth_files.sort_import_asc') },
     ],
     [t]
   );
@@ -459,8 +526,12 @@ export function AuthFilesPage() {
       copy.sort((a, b) => {
         const pa = parsePriorityValue(a.priority) ?? 0;
         const pb = parsePriorityValue(b.priority) ?? 0;
-        return pb - pa; // 高优先级排前面
+        return pb - pa;
       });
+    } else if (sortMode === 'import_desc' || sortMode === 'import_asc') {
+      copy.sort((a, b) =>
+        compareAuthFilesByImportTime(a, b, sortMode === 'import_asc' ? 'asc' : 'desc')
+      );
     }
     return copy;
   }, [filtered, sortMode]);
@@ -530,10 +601,6 @@ export function AuthFilesPage() {
     },
     [filter, navigate]
   );
-
-  const openUsageCosts = useCallback(() => {
-    navigate('/usage-costs');
-  }, [navigate]);
 
   useActionBarHeightVar(
     floatingBatchActionsRef,
@@ -690,8 +757,16 @@ export function AuthFilesPage() {
         title={titleNode}
         extra={
           <div className={styles.headerActions}>
-            <Button variant="secondary" size="sm" onClick={handleHeaderRefresh} disabled={loading}>
-              {t('common.refresh')}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void handleRefreshAllCredentials()}
+              disabled={disableControls || loading || refreshingAllCredentials}
+              loading={refreshingAllCredentials}
+              title={t('quota_management.refresh_all_credentials')}
+            >
+              {!refreshingAllCredentials && <IconRefreshCw size={16} />}
+              {t('quota_management.refresh_all_credentials')}
             </Button>
             <Button
               size="sm"
@@ -848,7 +923,6 @@ export function AuthFilesPage() {
                       onDelete={handleDelete}
                       onToggleStatus={handleStatusToggle}
                       onToggleSelect={toggleSelect}
-                      onOpenUsageCosts={openUsageCosts}
                     />
                   );
                 })}

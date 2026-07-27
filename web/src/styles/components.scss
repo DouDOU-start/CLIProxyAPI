@@ -15,6 +15,13 @@
   background-color: var(--bg-secondary);
   color: var(--text-primary);
 
+  > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: inherit;
+  }
+
   &.btn-primary {
     background-color: var(--primary-color);
     color: var(--primary-contrast, #fff);

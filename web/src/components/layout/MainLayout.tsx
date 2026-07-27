@@ -54,7 +54,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
   system: <IconSidebarSystem size={18} />,
-  usageCosts: <IconDollarSign size={18} />,
+  modelPrices: <IconDollarSign size={18} />,
 };
 
 interface SidebarNavLinkItem {
@@ -543,12 +543,6 @@ export function MainLayout() {
       labelKey: 'nav_groups.observe',
       items: [
         {
-          path: '/usage-costs',
-          labelKey: 'nav.usage_costs',
-          metaKey: 'nav_meta.usage_costs',
-          icon: sidebarIcons.usageCosts,
-        },
-        {
           path: '/logs',
           labelKey: 'nav.logs',
           metaKey: 'nav_meta.logs',
@@ -560,6 +554,12 @@ export function MainLayout() {
       id: 'control',
       labelKey: 'nav_groups.control',
       items: [
+        {
+          path: '/model-prices',
+          labelKey: 'nav.model_prices',
+          metaKey: 'nav_meta.model_prices',
+          icon: sidebarIcons.modelPrices,
+        },
         {
           path: '/config',
           labelKey: 'nav.config_management',

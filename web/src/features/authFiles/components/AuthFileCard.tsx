@@ -60,7 +60,6 @@ export type AuthFileCardProps = {
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
-  onOpenUsageCosts: () => void;
 };
 
 export function AuthFileCard(props: AuthFileCardProps) {
@@ -82,7 +81,6 @@ export function AuthFileCard(props: AuthFileCardProps) {
     onDelete,
     onToggleStatus,
     onToggleSelect,
-    onOpenUsageCosts,
   } = props;
 
   const recentBuckets = normalizeRecentRequestBuckets(file.recent_requests ?? file.recentRequests);
@@ -245,12 +243,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
             </div>
 
             {usageMetrics && (
-              <button
-                type="button"
+              <div
                 className={`${styles.usageSummary} ${compact ? styles.usageSummaryCompact : ''}`}
-                onClick={onOpenUsageCosts}
-                title={t('auth_files.usage_details')}
-                aria-label={t('auth_files.usage_details')}
               >
                 <span className={styles.usageMetric}>
                   <span className={styles.usageMetricLabel}>{t('auth_files.usage_cost')}</span>
@@ -299,7 +293,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
                     </span>
                   </>
                 )}
-              </button>
+              </div>
             )}
 
             <div className={`${styles.statusPanel} ${compact ? styles.statusPanelCompact : ''}`}>
