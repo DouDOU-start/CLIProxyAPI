@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16
+    container_name: cli-proxy-postgres
+    entrypoint:
+      - /bin/bash
+      - /bootstrap/docker-postgres-entrypoint.sh
+    volumes:
+      - ${CLI_PROXY_CONFIG_PATH:-./config.yaml}:/bootstrap/config.yaml:ro
+      - ./docker-postgres-entrypoint.sh:/bootstrap/docker-postgres-entrypoint.sh:ro
+      - cli-proxy-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/bootstrap/docker-postgres-entrypoint.sh", "healthcheck"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
   cli-proxy-api:
     image: ${CLI_PROXY_IMAGE:-eceasy/cli-proxy-api:latest}
     pull_policy: always
@@ -10,17 +28,18 @@ services:
         COMMIT: ${COMMIT:-none}
         BUILD_DATE: ${BUILD_DATE:-unknown}
     container_name: cli-proxy-api
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       DEPLOY: ${DEPLOY:-}
     ports:
       - "8317:8317"
-      - "8085:8085"
-      - "1455:1455"
-      - "54545:54545"
-      - "51121:51121"
-      - "11451:11451"
     volumes:
       - ${CLI_PROXY_CONFIG_PATH:-./config.yaml}:/CLIProxyAPI/config.yaml
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs
       - ${CLI_PROXY_PLUGIN_PATH:-./plugins}:/CLIProxyAPI/plugins
     restart: unless-stopped
+
+volumes:
+  cli-proxy-postgres-data:

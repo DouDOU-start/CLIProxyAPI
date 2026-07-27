@@ -124,23 +124,25 @@ PackyCode 为本软件用户提供了特别优惠：使用<a href="https://www.p
 
 CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-for.me/cn/)
 
-### 本地开发
+### Docker Compose
 
-Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://localhost:8317/`。
+Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://localhost:8317/management.html`。
 
 项目现在强制依赖 PostgreSQL。本地 `config.yaml` 只保存数据库连接；服务设置、认证账号、模型价格和累计用量统计全部持久化到 PostgreSQL，并通过管理中心维护。为了兼容现有文件监听机制，进程运行期间会创建临时镜像目录，并在退出时自动删除。
 
 ```bash
 cp config.example.yaml config.yaml
-# 修改 config.yaml 中的 postgresql.dsn，然后启动：
-make dev
+# 修改 postgresql.dsn 中的密码，然后同时启动两个容器：
+./docker-build.sh
 ```
+
+Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在 `cli-proxy-postgres-data` 命名卷中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放 `8317`，PostgreSQL 和 OAuth 回调端口均不对外映射。
 
 `postgresql.schema` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表，并向 `config_store` 写入最小系统配置。
 
-密码至少需要 8 个字符。首次启动后，通过管理中心修改服务设置；这些设置会写入 PostgreSQL，不会写入本地数据库引导 YAML。
+首次启动后打开 `http://localhost:8317/management.html`。当数据库中还没有管理员时，管理页面会自动切换到首次初始化界面，引导创建第一个管理员。密码至少需要 8 个字符，并以 bcrypt 哈希形式保存；创建完成后初始化入口会立即关闭。后续服务设置全部通过管理中心写入 PostgreSQL，不会写入本地数据库引导 YAML。
 
-需要前端热更新时，分别运行 `make dev-backend` 和 `make web-dev`，然后访问 `http://localhost:5173/`。
+需要原生开发时，请单独运行 PostgreSQL，将 DSN 主机名改为 `127.0.0.1`，再分别运行 `make dev-backend` 和 `make web-dev`。
 
 ## 管理 API 文档
 

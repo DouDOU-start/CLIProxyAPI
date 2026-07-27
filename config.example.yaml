@@ -2,5 +2,5 @@
 # All server settings, authentication accounts, model prices, and usage statistics
 # are stored in PostgreSQL and managed through the management console.
 postgresql:
-  dsn: "postgresql://user:password@127.0.0.1:5432/cliproxy?sslmode=disable"
+  dsn: "postgresql://cliproxy:change-this-password@postgres:5432/cliproxy?sslmode=disable"
   schema: "public"

@@ -16,6 +16,18 @@ export interface ManagementSession {
   expires_at: string;
 }
 
+export interface ManagementSetupStatus {
+  required: boolean;
+  remote_client: boolean;
+}
+
+export interface ManagementSetupRequest {
+  email: string;
+  password: string;
+  confirm_password: string;
+  allow_remote: boolean;
+}
+
 class ApiClient {
   private instance: AxiosInstance;
   private apiBase: string = '';
@@ -144,6 +156,14 @@ class ApiClient {
     return this.get<ManagementSession>('/auth/session');
   }
 
+  async getManagementSetupStatus(): Promise<ManagementSetupStatus> {
+    return this.get<ManagementSetupStatus>('/auth/setup');
+  }
+
+  async setupManagementAdmin(payload: ManagementSetupRequest): Promise<void> {
+    await this.post('/auth/setup', payload);
+  }
+
   async logout(): Promise<void> {
     await this.post('/auth/logout');
   }
@@ -173,7 +193,9 @@ class ApiClient {
 
       const requestPath = error.config?.url || '';
       const isAuthenticationRequest =
-        requestPath === '/auth/login' || requestPath === '/auth/session';
+        requestPath === '/auth/login' ||
+        requestPath === '/auth/session' ||
+        requestPath === '/auth/setup';
       if (error.response?.status === 401 && !isAuthenticationRequest) {
         window.dispatchEvent(new Event('unauthorized'));
       }

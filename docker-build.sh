@@ -2,62 +2,37 @@
 #
 # build.sh - Linux Build Script
 #
-# This script automates the process of building and running the Docker container
-# with version information dynamically injected at build time.
+# This script builds the current source and starts the application and PostgreSQL containers.
 
 set -euo pipefail
 
-if [[ "${1:-}" != "" ]]; then
+if [[ $# -ne 0 ]]; then
   echo "Error: unknown option '${1}'."
   echo "Usage: ./docker-build.sh"
   exit 1
 fi
 
-# --- Step 1: Choose Environment ---
-echo "Please select an option:"
-echo "1) Run using Pre-built Image (Recommended)"
-echo "2) Build from Source and Run (For Developers)"
-read -r -p "Enter choice [1-2]: " choice
+VERSION="$(git describe --tags --always --dirty)"
+COMMIT="$(git rev-parse --short HEAD)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# --- Step 2: Execute based on choice ---
-case "$choice" in
-  1)
-    echo "--- Running with Pre-built Image ---"
-    docker compose up -d --remove-orphans --no-build
-    echo "Services are starting from remote image."
-    echo "Run 'docker compose logs -f' to see the logs."
-    ;;
-  2)
-    echo "--- Building from Source and Running ---"
+echo "Building with the following info:"
+echo "  Version: ${VERSION}"
+echo "  Commit: ${COMMIT}"
+echo "  Build Date: ${BUILD_DATE}"
+echo "----------------------------------------"
 
-    # Get Version Information
-    VERSION="$(git describe --tags --always --dirty)"
-    COMMIT="$(git rev-parse --short HEAD)"
-    BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+export CLI_PROXY_IMAGE="cli-proxy-api:local"
 
-    echo "Building with the following info:"
-    echo "  Version: ${VERSION}"
-    echo "  Commit: ${COMMIT}"
-    echo "  Build Date: ${BUILD_DATE}"
-    echo "----------------------------------------"
+echo "Building the application image..."
+docker compose build \
+  --build-arg VERSION="${VERSION}" \
+  --build-arg COMMIT="${COMMIT}" \
+  --build-arg BUILD_DATE="${BUILD_DATE}" \
+  cli-proxy-api
 
-    # Build and start the services with a local-only image tag
-    export CLI_PROXY_IMAGE="cli-proxy-api:local"
+echo "Starting the application and PostgreSQL containers..."
+docker compose up -d --remove-orphans --pull never
 
-    echo "Building the Docker image..."
-    docker compose build \
-      --build-arg VERSION="${VERSION}" \
-      --build-arg COMMIT="${COMMIT}" \
-      --build-arg BUILD_DATE="${BUILD_DATE}"
-
-    echo "Starting the services..."
-    docker compose up -d --remove-orphans --pull never
-
-    echo "Build complete. Services are starting."
-    echo "Run 'docker compose logs -f' to see the logs."
-    ;;
-  *)
-    echo "Invalid choice. Please enter 1 or 2."
-    exit 1
-    ;;
-esac
+echo "Build complete. Services are running."
+echo "Run 'docker compose logs -f' to see the logs."

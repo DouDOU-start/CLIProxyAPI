@@ -56,6 +56,7 @@ type Handler struct {
 	postAuthPersistHook     coreauth.PostAuthHook
 	pluginHost              *pluginhost.Host
 	configReloadHook        func(context.Context, *config.Config)
+	configPersistHook       func(context.Context) error
 	pluginStoreRegistryURL  string
 	pluginStoreHTTPClient   pluginstore.HTTPDoer
 	pluginReleaseCacheMu    sync.Mutex
@@ -174,6 +175,16 @@ func (h *Handler) SetConfigReloadHook(hook func(context.Context, *config.Config)
 	}
 	h.mu.Lock()
 	h.configReloadHook = hook
+	h.mu.Unlock()
+}
+
+// SetConfigPersistHook updates the callback used for synchronous config persistence.
+func (h *Handler) SetConfigPersistHook(hook func(context.Context) error) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.configPersistHook = hook
 	h.mu.Unlock()
 }
 

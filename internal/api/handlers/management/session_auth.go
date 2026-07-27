@@ -7,10 +7,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/mail"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -22,6 +25,8 @@ const (
 	managementMaxSessions     = 1024
 	managementMaxFailures     = 5
 	managementBanDuration     = 30 * time.Minute
+	managementPasswordMinLen  = 8
+	managementPasswordMaxLen  = 72
 )
 
 type managementSession struct {
@@ -69,6 +74,155 @@ func (h *Handler) configuredManagementCredentials() (managementCredentials, bool
 	sum := sha256.Sum256([]byte(credentials.Email + "\x00" + credentials.Password))
 	credentials.Fingerprint = base64.RawURLEncoding.EncodeToString(sum[:])
 	return credentials, true
+}
+
+func (h *Handler) managementSetupRequired() bool {
+	if h == nil {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.managementSetupRequiredLocked()
+}
+
+// managementSetupRequiredLocked reports whether the one-time setup endpoint is available.
+// Callers must hold h.mu.
+func (h *Handler) managementSetupRequiredLocked() bool {
+	if h == nil || h.cfg == nil || h.envEmail != "" || h.envPassword != "" {
+		return false
+	}
+	return strings.TrimSpace(h.cfg.RemoteManagement.Email) == "" && strings.TrimSpace(h.cfg.RemoteManagement.Password) == ""
+}
+
+// GetSetupStatus reports whether the first administrator still needs to be created.
+func (h *Handler) GetSetupStatus(c *gin.Context) {
+	if h == nil || c == nil {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{
+		"required":      h.managementSetupRequired(),
+		"remote_client": !isLocalManagementClient(c.ClientIP()),
+	})
+}
+
+// Setup creates the first administrator and closes the setup endpoint permanently.
+func (h *Handler) Setup(c *gin.Context) {
+	if h == nil || c == nil {
+		return
+	}
+	c.Header("Cache-Control", "no-store")
+	if !sameOriginManagementRequest(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cross_origin_setup_forbidden", "message": "administrator setup must be submitted from this management page"})
+		return
+	}
+	if !h.managementSetupRequired() {
+		c.JSON(http.StatusConflict, gin.H{"error": "management_already_configured", "message": "the administrator account has already been configured"})
+		return
+	}
+
+	var body struct {
+		Email           string `json:"email"`
+		Password        string `json:"password"`
+		ConfirmPassword string `json:"confirm_password"`
+		AllowRemote     bool   `json:"allow_remote"`
+	}
+	if errBind := c.ShouldBindJSON(&body); errBind != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "email, password, and password confirmation are required"})
+		return
+	}
+
+	email, errEmail := normalizeManagementSetupEmail(body.Email)
+	if errEmail != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_email", "message": errEmail.Error()})
+		return
+	}
+	if body.Password != body.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password_mismatch", "message": "password confirmation does not match"})
+		return
+	}
+	passwordBytes := []byte(body.Password)
+	if len(passwordBytes) < managementPasswordMinLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password_too_short", "message": fmt.Sprintf("password must contain at least %d bytes", managementPasswordMinLen)})
+		return
+	}
+	if len(passwordBytes) > managementPasswordMaxLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password_too_long", "message": fmt.Sprintf("password must contain at most %d bytes", managementPasswordMaxLen)})
+		return
+	}
+	hashedPassword, errHash := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)
+	if errHash != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "password_hash_failed", "message": "failed to protect the administrator password"})
+		return
+	}
+
+	allowRemote := body.AllowRemote || !isLocalManagementClient(c.ClientIP())
+	h.mu.Lock()
+	if !h.managementSetupRequiredLocked() {
+		h.mu.Unlock()
+		c.JSON(http.StatusConflict, gin.H{"error": "management_already_configured", "message": "the administrator account has already been configured"})
+		return
+	}
+	previous := h.cfg.RemoteManagement
+	h.cfg.RemoteManagement = config.RemoteManagement{
+		AllowRemote: allowRemote,
+		Email:       email,
+		Password:    string(hashedPassword),
+	}
+	if errSave := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); errSave != nil {
+		h.cfg.RemoteManagement = previous
+		h.mu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "setup_save_failed", "message": fmt.Sprintf("failed to save administrator configuration: %v", errSave)})
+		return
+	}
+	if h.configPersistHook != nil {
+		if errPersist := h.configPersistHook(c.Request.Context()); errPersist != nil {
+			h.cfg.RemoteManagement = previous
+			errRollback := config.SaveConfigPreserveComments(h.configFilePath, h.cfg)
+			h.mu.Unlock()
+			if errRollback != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "setup_persist_failed", "message": fmt.Sprintf("failed to persist administrator configuration and restore the previous file: %v", errRollback)})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "setup_persist_failed", "message": fmt.Sprintf("failed to persist administrator configuration: %v", errPersist)})
+			return
+		}
+	}
+	snapshot := h.reloadSnapshotConfigLocked()
+	h.mu.Unlock()
+	h.reloadConfigAfterManagementSaveAsync(c.Request.Context(), snapshot)
+	c.JSON(http.StatusCreated, gin.H{
+		"status":       "created",
+		"email":        email,
+		"allow_remote": allowRemote,
+	})
+}
+
+func normalizeManagementSetupEmail(raw string) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(raw))
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+	address, errAddress := mail.ParseAddress(email)
+	if errAddress != nil || !strings.EqualFold(address.Address, email) {
+		return "", fmt.Errorf("email is invalid")
+	}
+	return email, nil
+}
+
+func sameOriginManagementRequest(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	origin := strings.TrimSpace(c.GetHeader("Origin"))
+	if origin == "" {
+		return true
+	}
+	parsed, errParse := url.Parse(origin)
+	if errParse != nil || parsed.Host == "" {
+		return false
+	}
+	return strings.EqualFold(parsed.Host, c.Request.Host)
 }
 
 func (h *Handler) Login(c *gin.Context) {

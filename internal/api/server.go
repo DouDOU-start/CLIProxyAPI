@@ -87,6 +87,7 @@ type serverOptionConfig struct {
 	postAuthPersistHook   auth.PostAuthHook
 	pluginHost            *pluginhost.Host
 	configReloadHook      func(context.Context, *config.Config)
+	configPersistHook     func(context.Context) error
 	exampleAPIKeySafeMode bool
 	usageStatsStore       *usagestats.Store
 }
@@ -178,6 +179,13 @@ func WithPluginHost(host *pluginhost.Host) ServerOption {
 func WithConfigReloadHook(hook func(context.Context, *config.Config)) ServerOption {
 	return func(cfg *serverOptionConfig) {
 		cfg.configReloadHook = hook
+	}
+}
+
+// WithConfigPersistHook registers synchronous persistence used by first-run setup.
+func WithConfigPersistHook(hook func(context.Context) error) ServerOption {
+	return func(cfg *serverOptionConfig) {
+		cfg.configPersistHook = hook
 	}
 }
 
@@ -360,6 +368,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	}
 	s.mgmt.SetPluginHost(optionState.pluginHost)
 	s.mgmt.SetConfigReloadHook(optionState.configReloadHook)
+	s.mgmt.SetConfigPersistHook(optionState.configPersistHook)
 	logDir := logging.ResolveLogDirectory(cfg)
 	s.mgmt.SetLogDirectory(logDir)
 	if optionState.postAuthHook != nil {
@@ -911,6 +920,8 @@ func (s *Server) registerManagementRoutes() {
 	s.engine.GET("/v0/management/oauth-callback", s.managementAvailabilityMiddleware(), s.mgmt.GetOAuthCallback)
 	s.engine.POST("/v0/management/auth/login", s.managementAvailabilityMiddleware(), s.mgmt.Login)
 	s.engine.GET("/v0/management/auth/session", s.managementAvailabilityMiddleware(), s.mgmt.GetSession)
+	s.engine.GET("/v0/management/auth/setup", s.managementAvailabilityMiddleware(), s.mgmt.GetSetupStatus)
+	s.engine.POST("/v0/management/auth/setup", s.managementAvailabilityMiddleware(), s.mgmt.Setup)
 
 	mgmt := s.engine.Group("/v0/management")
 	mgmt.Use(s.managementAvailabilityMiddleware(), s.mgmt.Middleware())

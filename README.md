@@ -124,23 +124,25 @@ PackyCode provides special discounts for our software users: register using <a h
 
 CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
-### Local Development
+### Docker Compose
 
-The web management console is built into the Go binary and opens at `http://localhost:8317/`.
+The web management console is built into the Go binary and opens at `http://localhost:8317/management.html`.
 
 PostgreSQL is required. The local `config.yaml` contains only the database connection. Server settings, authentication accounts, model prices, and cumulative usage statistics are persisted in PostgreSQL and managed through the management console. The server creates a temporary runtime mirror for file-watcher compatibility and removes it on exit.
 
 ```bash
 cp config.example.yaml config.yaml
-# Edit postgresql.dsn in config.yaml, then start the service:
-make dev
+# Change the password in postgresql.dsn, then start both containers:
+./docker-build.sh
 ```
+
+Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `cli-proxy-postgres-data` named volume. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only port `8317` is published to the host; PostgreSQL and OAuth callback ports remain internal.
 
 `postgresql.schema` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically and inserts a minimal system configuration into `config_store`.
 
-The password must contain at least 8 characters. After the first startup, configure server settings through the management console; they are written to PostgreSQL rather than the local bootstrap YAML.
+Open `http://localhost:8317/management.html` after the first startup. When the database has no administrator, the management page automatically switches to first-run setup and asks you to create one. The password must contain at least 8 characters and is stored as a bcrypt hash. After setup, the initialization entry closes immediately and all subsequent server settings are written to PostgreSQL rather than the local bootstrap YAML.
 
-For frontend hot reload, run `make dev-backend` and `make web-dev` in separate terminals, then open `http://localhost:5173/`.
+For native development, run PostgreSQL separately, change the DSN hostname to `127.0.0.1`, then run `make dev-backend` and `make web-dev` in separate terminals.
 
 ## Management API
 

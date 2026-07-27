@@ -1,9 +1,13 @@
 package management
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,6 +20,150 @@ type sessionLoginResponse struct {
 	Authenticated bool   `json:"authenticated"`
 	Email         string `json:"email"`
 	CSRFToken     string `json:"csrf_token"`
+}
+
+type setupStatusResponse struct {
+	Required     bool `json:"required"`
+	RemoteClient bool `json:"remote_client"`
+}
+
+func newManagementSetupTestHandler(t *testing.T) (*Handler, string) {
+	t.Helper()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if errWrite := os.WriteFile(configPath, []byte("host: \"\"\nport: 8317\nauth-dir: \"\"\n"), 0o600); errWrite != nil {
+		t.Fatalf("write setup config: %v", errWrite)
+	}
+	return &Handler{
+		cfg:            &config.Config{Port: 8317},
+		configFilePath: configPath,
+		failedAttempts: make(map[string]*attemptInfo),
+		sessions:       make(map[string]*managementSession),
+	}, configPath
+}
+
+func TestManagementFirstRunSetupCreatesAdministrator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h, configPath := newManagementSetupTestHandler(t)
+	persistCalls := 0
+	h.SetConfigPersistHook(func(context.Context) error {
+		persistCalls++
+		return nil
+	})
+	engine := gin.New()
+	engine.GET("/v0/management/auth/setup", h.GetSetupStatus)
+	engine.POST("/v0/management/auth/setup", h.Setup)
+	engine.POST("/v0/management/auth/login", h.Login)
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/v0/management/auth/setup", nil)
+	statusReq.RemoteAddr = "192.0.2.10:12345"
+	statusRec := httptest.NewRecorder()
+	engine.ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("setup status = %d, want %d body=%s", statusRec.Code, http.StatusOK, statusRec.Body.String())
+	}
+	var setupStatus setupStatusResponse
+	if errDecode := json.Unmarshal(statusRec.Body.Bytes(), &setupStatus); errDecode != nil {
+		t.Fatalf("decode setup status: %v", errDecode)
+	}
+	if !setupStatus.Required || !setupStatus.RemoteClient {
+		t.Fatalf("unexpected setup status: %#v", setupStatus)
+	}
+
+	setupBody := `{"email":"Admin@Example.com","password":"test-password-123","confirm_password":"test-password-123","allow_remote":false}`
+	setupReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth/setup", strings.NewReader(setupBody))
+	setupReq.RemoteAddr = "192.0.2.10:12345"
+	setupReq.Header.Set("Content-Type", "application/json")
+	setupReq.Header.Set("Origin", "http://example.com")
+	setupRec := httptest.NewRecorder()
+	engine.ServeHTTP(setupRec, setupReq)
+	if setupRec.Code != http.StatusCreated {
+		t.Fatalf("setup status = %d, want %d body=%s", setupRec.Code, http.StatusCreated, setupRec.Body.String())
+	}
+	if persistCalls != 1 {
+		t.Fatalf("persist calls = %d, want 1", persistCalls)
+	}
+	if h.cfg.RemoteManagement.Email != "admin@example.com" || !h.cfg.RemoteManagement.AllowRemote {
+		t.Fatalf("unexpected management config: %#v", h.cfg.RemoteManagement)
+	}
+	if !looksLikeBcryptPassword(h.cfg.RemoteManagement.Password) {
+		t.Fatalf("setup password is not bcrypt: %q", h.cfg.RemoteManagement.Password)
+	}
+	if !managementPasswordMatches(managementCredentials{
+		Email:       h.cfg.RemoteManagement.Email,
+		Password:    h.cfg.RemoteManagement.Password,
+		PasswordRaw: false,
+	}, "admin@example.com", "test-password-123") {
+		t.Fatal("created administrator password does not match")
+	}
+	persisted, errRead := os.ReadFile(configPath)
+	if errRead != nil {
+		t.Fatalf("read persisted setup config: %v", errRead)
+	}
+	if strings.Contains(string(persisted), "test-password-123") {
+		t.Fatal("persisted setup config contains the plaintext password")
+	}
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth/login", strings.NewReader(`{"email":"admin@example.com","password":"test-password-123"}`))
+	loginReq.RemoteAddr = "192.0.2.10:12345"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginRec := httptest.NewRecorder()
+	engine.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("login after setup status = %d, want %d body=%s", loginRec.Code, http.StatusOK, loginRec.Body.String())
+	}
+
+	secondSetupReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth/setup", strings.NewReader(setupBody))
+	secondSetupReq.RemoteAddr = "192.0.2.10:12345"
+	secondSetupReq.Header.Set("Content-Type", "application/json")
+	secondSetupRec := httptest.NewRecorder()
+	engine.ServeHTTP(secondSetupRec, secondSetupReq)
+	if secondSetupRec.Code != http.StatusConflict {
+		t.Fatalf("second setup status = %d, want %d", secondSetupRec.Code, http.StatusConflict)
+	}
+}
+
+func TestManagementFirstRunSetupRollsBackOnPersistenceFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h, configPath := newManagementSetupTestHandler(t)
+	h.SetConfigPersistHook(func(context.Context) error { return errors.New("database unavailable") })
+	engine := gin.New()
+	engine.POST("/v0/management/auth/setup", h.Setup)
+
+	setupReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth/setup", strings.NewReader(`{"email":"admin@example.com","password":"test-password-123","confirm_password":"test-password-123"}`))
+	setupReq.RemoteAddr = "127.0.0.1:12345"
+	setupReq.Header.Set("Content-Type", "application/json")
+	setupRec := httptest.NewRecorder()
+	engine.ServeHTTP(setupRec, setupReq)
+	if setupRec.Code != http.StatusInternalServerError {
+		t.Fatalf("setup status = %d, want %d body=%s", setupRec.Code, http.StatusInternalServerError, setupRec.Body.String())
+	}
+	if h.cfg.RemoteManagement.Email != "" || h.cfg.RemoteManagement.Password != "" {
+		t.Fatalf("management config was not rolled back: %#v", h.cfg.RemoteManagement)
+	}
+	persisted, errRead := os.ReadFile(configPath)
+	if errRead != nil {
+		t.Fatalf("read rolled back config: %v", errRead)
+	}
+	if strings.Contains(string(persisted), "admin@example.com") {
+		t.Fatal("rolled back config still contains the administrator email")
+	}
+}
+
+func TestManagementFirstRunSetupRejectsCrossOriginRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h, _ := newManagementSetupTestHandler(t)
+	engine := gin.New()
+	engine.POST("/v0/management/auth/setup", h.Setup)
+
+	req := httptest.NewRequest(http.MethodPost, "/v0/management/auth/setup", strings.NewReader(`{"email":"admin@example.com","password":"test-password-123","confirm_password":"test-password-123"}`))
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://attacker.example")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin setup status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
 }
 
 func TestManagementPasswordMatchesPlaintextConfig(t *testing.T) {
