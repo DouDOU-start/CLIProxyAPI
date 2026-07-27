@@ -35,9 +35,6 @@ type Config struct {
 	// Port is the network port on which the API server will listen.
 	Port int `yaml:"port" json:"-"`
 
-	// TLS config controls HTTPS server settings.
-	TLS TLSConfig `yaml:"tls" json:"tls"`
-
 	// Home config is runtime-only and is populated from -home-jwt.
 	Home HomeConfig `yaml:"-" json:"-"`
 
@@ -291,16 +288,6 @@ type CodexHeaderDefaults struct {
 // CodexConfig configures provider-wide Codex request behavior.
 type CodexConfig struct {
 	IdentityConfuse bool `yaml:"identity-confuse" json:"identity-confuse"`
-}
-
-// TLSConfig holds HTTPS server settings.
-type TLSConfig struct {
-	// Enable toggles HTTPS server mode.
-	Enable bool `yaml:"enable" json:"enable"`
-	// Cert is the path to the TLS certificate file.
-	Cert string `yaml:"cert" json:"cert"`
-	// Key is the path to the TLS private key file.
-	Key string `yaml:"key" json:"key"`
 }
 
 // PprofConfig holds pprof HTTP server settings.

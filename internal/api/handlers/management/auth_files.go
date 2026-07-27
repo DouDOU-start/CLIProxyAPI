@@ -235,11 +235,7 @@ func (h *Handler) managementCallbackURL(path string) (string, error) {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	scheme := "http"
-	if h.cfg.TLS.Enable {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://127.0.0.1:%d%s", scheme, h.cfg.Port, path), nil
+	return fmt.Sprintf("http://127.0.0.1:%d%s", h.cfg.Port, path), nil
 }
 
 func pluginAuthProviderFromPath(path string) (string, bool) {

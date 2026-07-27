@@ -1,6 +1,11 @@
-# Local database bootstrap configuration.
-# All server settings, authentication accounts, model prices, and usage statistics
-# are stored in PostgreSQL and managed through the management console.
+# Process-local startup settings are not stored in PostgreSQL.
+host: ""
+port: 8317
+plugins:
+  dir: "plugins"
+
+# PostgreSQL stores runtime-managed settings, authentication accounts, model prices,
+# and usage statistics.
 postgresql:
   dsn: "postgresql://cliproxy:change-this-password@postgres:5432/cliproxy?sslmode=disable"
   schema: "public"

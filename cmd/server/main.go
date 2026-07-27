@@ -56,35 +56,58 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, cloudCon
 	return safemode.HasExampleAPIKeys(cfg.APIKeys)
 }
 
-type postgresBootstrapConfig struct {
+type localStartupConfig struct {
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
+	Plugins struct {
+		Dir string `yaml:"dir"`
+	} `yaml:"plugins"`
 	PostgreSQL struct {
 		DSN    string `yaml:"dsn"`
 		Schema string `yaml:"schema"`
 	} `yaml:"postgresql"`
 }
 
-func loadRequiredPostgresConfig(path string) (dsn, schema string, err error) {
+func loadLocalStartupConfig(path string) (*localStartupConfig, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return "", "", fmt.Errorf("database bootstrap config path is required")
+		return nil, fmt.Errorf("local startup config path is required")
 	}
 	data, errRead := os.ReadFile(path)
 	if errRead != nil {
 		if errors.Is(errRead, os.ErrNotExist) {
-			return "", "", fmt.Errorf("database bootstrap config %s is required", path)
+			return nil, fmt.Errorf("local startup config %s is required", path)
 		}
-		return "", "", fmt.Errorf("read database bootstrap config %s: %w", path, errRead)
+		return nil, fmt.Errorf("read local startup config %s: %w", path, errRead)
 	}
-	var bootstrap postgresBootstrapConfig
-	if errUnmarshal := yaml.Unmarshal(data, &bootstrap); errUnmarshal != nil {
-		return "", "", fmt.Errorf("parse database bootstrap config %s: %w", path, errUnmarshal)
+	startup := &localStartupConfig{Port: 8317}
+	startup.Plugins.Dir = "plugins"
+	if errUnmarshal := yaml.Unmarshal(data, startup); errUnmarshal != nil {
+		return nil, fmt.Errorf("parse local startup config %s: %w", path, errUnmarshal)
 	}
-	dsn = strings.TrimSpace(bootstrap.PostgreSQL.DSN)
-	schema = strings.TrimSpace(bootstrap.PostgreSQL.Schema)
-	if dsn == "" {
-		return "", "", fmt.Errorf("postgresql.dsn is required in %s", path)
+	startup.Host = strings.TrimSpace(startup.Host)
+	startup.Plugins.Dir = strings.TrimSpace(startup.Plugins.Dir)
+	startup.PostgreSQL.DSN = strings.TrimSpace(startup.PostgreSQL.DSN)
+	startup.PostgreSQL.Schema = strings.TrimSpace(startup.PostgreSQL.Schema)
+	if startup.Plugins.Dir == "" {
+		startup.Plugins.Dir = "plugins"
 	}
-	return dsn, schema, nil
+	if startup.PostgreSQL.DSN == "" {
+		return nil, fmt.Errorf("postgresql.dsn is required in %s", path)
+	}
+	if startup.Port < 1 || startup.Port > 65535 {
+		return nil, fmt.Errorf("port must be between 1 and 65535 in %s", path)
+	}
+	return startup, nil
+}
+
+func applyLocalStartupConfig(cfg *config.Config, startup *localStartupConfig) {
+	if cfg == nil || startup == nil {
+		return
+	}
+	cfg.Host = startup.Host
+	cfg.Port = startup.Port
+	cfg.Plugins.Dir = startup.Plugins.Dir
 }
 
 func databaseBootstrapConfigPath(args []string, defaultPath string) (string, error) {
@@ -194,6 +217,7 @@ func main() {
 	var cfg *config.Config
 	var isCloudDeploy bool
 	var (
+		startupConfig *localStartupConfig
 		pgStoreDSN    string
 		pgStoreSchema string
 		pgStoreInst   *store.PostgresStore
@@ -218,11 +242,13 @@ func main() {
 	}
 	configPath = resolveDatabaseBootstrapConfigPath(bootstrapPath, wd)
 
-	pgStoreDSN, pgStoreSchema, err = loadRequiredPostgresConfig(configPath)
+	startupConfig, err = loadLocalStartupConfig(configPath)
 	if err != nil {
 		log.Error(err)
 		return
 	}
+	pgStoreDSN = startupConfig.PostgreSQL.DSN
+	pgStoreSchema = startupConfig.PostgreSQL.Schema
 
 	// Check for cloud deploy mode only on first execution
 	// Read env var name in uppercase: DEPLOY
@@ -267,6 +293,7 @@ func main() {
 		log.Error("Home control plane configuration is unavailable because PostgreSQL is the required persistence backend")
 		return
 	}
+	applyLocalStartupConfig(cfg, startupConfig)
 	cfg.AuthDir = pgStoreInst.AuthDir()
 	log.Infof("required postgres store enabled; temporary workspace: %s", pgStoreInst.WorkDir())
 

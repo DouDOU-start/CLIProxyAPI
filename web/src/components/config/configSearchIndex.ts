@@ -42,52 +42,11 @@ const L = (key: string) => `config_management.visual.${key}`;
 export const CONFIG_FIELD_SEARCH_INDEX: ConfigFieldSearchEntry[] = [
   // ── connectivity ──────────────────────────────────────────────────────────
   {
-    fieldId: 'host',
-    sectionId: 'connectivity',
-    labelKey: L('sections.server.host'),
-    yamlKeys: ['host'],
-  },
-  {
-    fieldId: 'port',
-    sectionId: 'connectivity',
-    labelKey: L('sections.server.port'),
-    yamlKeys: ['port'],
-  },
-  {
-    fieldId: 'authDir',
-    sectionId: 'connectivity',
-    labelKey: L('sections.auth.auth_dir'),
-    hintKey: L('sections.auth.auth_dir_hint'),
-    yamlKeys: ['auth-dir'],
-  },
-  {
     fieldId: 'apiKeys',
     sectionId: 'connectivity',
     labelKey: L('api_keys.label'),
     yamlKeys: ['api-keys'],
     keywords: ['api key', 'apikey', 'token'],
-  },
-  {
-    fieldId: 'tlsEnable',
-    sectionId: 'connectivity',
-    labelKey: L('sections.tls.enable'),
-    hintKey: L('sections.tls.enable_desc'),
-    yamlKeys: ['tls'],
-    keywords: ['tls', 'ssl', 'https'],
-  },
-  {
-    fieldId: 'tlsCert',
-    sectionId: 'connectivity',
-    labelKey: L('sections.tls.cert'),
-    yamlKeys: ['tls', 'cert'],
-    keywords: ['tls', 'ssl', 'certificate'],
-  },
-  {
-    fieldId: 'tlsKey',
-    sectionId: 'connectivity',
-    labelKey: L('sections.tls.key'),
-    yamlKeys: ['tls', 'key'],
-    keywords: ['tls', 'ssl', 'private key'],
   },
   {
     fieldId: 'rmAllowRemote',

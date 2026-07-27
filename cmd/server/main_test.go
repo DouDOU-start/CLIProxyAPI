@@ -8,17 +8,30 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 )
 
-func TestLoadRequiredPostgresConfig(t *testing.T) {
+func TestLoadLocalStartupConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		file       string
+		wantHost   string
+		wantPort   int
 		wantDSN    string
 		wantSchema string
+		wantPlugin string
 		wantErr    bool
 	}{
-		{name: "YAML configuration", file: "postgresql:\n  dsn: postgres://yaml\n  schema: app\n", wantDSN: "postgres://yaml", wantSchema: "app"},
+		{
+			name:       "YAML configuration",
+			file:       "host: 127.0.0.1\nport: 9443\nplugins:\n  dir: local-plugins\npostgresql:\n  dsn: postgres://yaml\n  schema: app\n",
+			wantHost:   "127.0.0.1",
+			wantPort:   9443,
+			wantDSN:    "postgres://yaml",
+			wantSchema: "app",
+			wantPlugin: "local-plugins",
+		},
+		{name: "startup defaults", file: "postgresql:\n  dsn: postgres://yaml\n", wantPort: 8317, wantDSN: "postgres://yaml", wantPlugin: "plugins"},
 		{name: "missing file", wantErr: true},
 		{name: "missing DSN", file: "postgresql:\n  schema: public\n", wantErr: true},
+		{name: "invalid port", file: "port: 70000\npostgresql:\n  dsn: postgres://yaml\n", wantErr: true},
 		{name: "invalid YAML", file: "postgresql: [", wantErr: true},
 	}
 
@@ -30,14 +43,33 @@ func TestLoadRequiredPostgresConfig(t *testing.T) {
 					t.Fatalf("write bootstrap config: %v", errWrite)
 				}
 			}
-			gotDSN, gotSchema, errConfig := loadRequiredPostgresConfig(path)
+			got, errConfig := loadLocalStartupConfig(path)
 			if (errConfig != nil) != test.wantErr {
-				t.Fatalf("loadRequiredPostgresConfig() error = %v, wantErr %t", errConfig, test.wantErr)
+				t.Fatalf("loadLocalStartupConfig() error = %v, wantErr %t", errConfig, test.wantErr)
 			}
-			if gotDSN != test.wantDSN || gotSchema != test.wantSchema {
-				t.Fatalf("loadRequiredPostgresConfig() = (%q, %q), want (%q, %q)", gotDSN, gotSchema, test.wantDSN, test.wantSchema)
+			if test.wantErr {
+				return
+			}
+			if got.Host != test.wantHost || got.Port != test.wantPort || got.PostgreSQL.DSN != test.wantDSN || got.PostgreSQL.Schema != test.wantSchema || got.Plugins.Dir != test.wantPlugin {
+				t.Fatalf("loadLocalStartupConfig() = %+v, want host=%q port=%d dsn=%q schema=%q plugins.dir=%q", got, test.wantHost, test.wantPort, test.wantDSN, test.wantSchema, test.wantPlugin)
 			}
 		})
+	}
+}
+
+func TestApplyLocalStartupConfig(t *testing.T) {
+	startup := &localStartupConfig{Host: "127.0.0.1", Port: 9443}
+	startup.Plugins.Dir = "local-plugins"
+	runtimeCfg := &config.Config{}
+	runtimeCfg.Plugins.Enabled = true
+
+	applyLocalStartupConfig(runtimeCfg, startup)
+
+	if runtimeCfg.Host != startup.Host || runtimeCfg.Port != startup.Port {
+		t.Fatalf("local listener settings were not applied: %+v", runtimeCfg)
+	}
+	if runtimeCfg.Plugins.Dir != startup.Plugins.Dir || !runtimeCfg.Plugins.Enabled {
+		t.Fatalf("local plugin directory overlay lost runtime plugin settings: %+v", runtimeCfg.Plugins)
 	}
 }
 

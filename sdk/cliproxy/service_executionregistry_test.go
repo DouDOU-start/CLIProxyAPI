@@ -2546,6 +2546,33 @@ func readRegistryTestRedisCommand(reader *bufio.Reader) ([]string, error) {
 	return args, nil
 }
 
+func TestPreserveLocalStartupConfig(t *testing.T) {
+	current := &internalconfig.Config{
+		Host:    "127.0.0.1",
+		Port:    9443,
+		AuthDir: "/runtime/auths",
+		Plugins: internalconfig.PluginsConfig{Dir: "local-plugins", Enabled: true},
+	}
+	next := &internalconfig.Config{
+		Host:    "0.0.0.0",
+		Port:    8317,
+		AuthDir: "/database/auths",
+		Plugins: internalconfig.PluginsConfig{Dir: "database-plugins", Enabled: false},
+	}
+
+	preserveLocalStartupConfig(current, next)
+
+	if next.Host != current.Host || next.Port != current.Port {
+		t.Fatalf("listener settings were not preserved: %+v", next)
+	}
+	if next.AuthDir != current.AuthDir || next.Plugins.Dir != current.Plugins.Dir {
+		t.Fatalf("local paths were not preserved: %+v", next)
+	}
+	if next.Plugins.Enabled {
+		t.Fatalf("runtime-managed plugin settings should come from the database: %+v", next.Plugins)
+	}
+}
+
 func TestServiceSkipsStaleLocalConfigRuntimeApply(t *testing.T) {
 	service := &Service{cfg: &config.Config{}}
 	var applied []string

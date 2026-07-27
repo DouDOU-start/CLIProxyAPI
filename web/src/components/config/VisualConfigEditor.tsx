@@ -264,19 +264,15 @@ export function VisualConfigEditor({
     if (mode !== 'full' || !jumpRequest || handledJumpRef.current === jumpRequest) return;
     handledJumpRef.current = jumpRequest; // handle each request once, even if deps re-fire
     const { fieldId, sectionId } = jumpRequest;
-    const targetFieldId =
-      (fieldId === 'tlsCert' || fieldId === 'tlsKey') && !values.tlsEnable ? 'tlsEnable' : fieldId;
-
-    const el = document.getElementById(configFieldDomId(targetFieldId));
+    const el = document.getElementById(configFieldDomId(fieldId));
     if (!el) {
-      // Field not rendered right now (e.g. TLS cert while TLS is disabled) — fall back to
-      // bringing its section into view horizontally.
+      // A conditionally rendered field may be unavailable, so bring its section into view.
       sectionRefs.current[sectionId]?.scrollIntoView({ block: 'nearest', inline: 'start' });
       return;
     }
 
     // Expand the collapsed <details> group this field belongs to: an ancestor when the
-    // anchor sits inside the group (TLS / remote / advanced fields), or a descendant when
+    // anchor sits inside the group (remote / advanced fields), or a descendant when
     // the anchor wraps the whole group (payload rule groups).
     const details = el.closest('details') ?? el.querySelector('details');
     if (details && !details.open) details.open = true;
@@ -304,7 +300,7 @@ export function VisualConfigEditor({
       highlightTimerRef.current = null;
       highlightedElRef.current = null;
     }, 1800);
-  }, [mode, jumpRequest, values.tlsEnable]);
+  }, [mode, jumpRequest]);
 
   // Clear the highlight timer on unmount.
   useEffect(
@@ -341,7 +337,6 @@ export function VisualConfigEditor({
     values.streaming.nonstreamKeepaliveInterval === '' ||
     values.streaming.nonstreamKeepaliveInterval === '0';
 
-  const portError = getValidationMessage(t, validationErrors?.port);
   const logsMaxSizeError = getValidationMessage(t, validationErrors?.logsMaxTotalSizeMb);
   const errorLogsMaxFilesError = getValidationMessage(t, validationErrors?.errorLogsMaxFiles);
   const redisUsageQueueRetentionError = getValidationMessage(
@@ -431,7 +426,7 @@ export function VisualConfigEditor({
         id: 'connectivity',
         title: t('config_management.visual.sections.connectivity.title'),
         icon: IconKey,
-        errorCount: countErrors(['port']),
+        errorCount: 0,
       },
       {
         id: 'network',
@@ -488,11 +483,7 @@ export function VisualConfigEditor({
 
   const hasValidationIssues =
     sections.some((section) => section.errorCount > 0) || hasPayloadValidationErrors;
-  // Validation errors that live in fields not surfaced by simple mode (everything except `port`).
-  const hasHiddenValidationIssues =
-    (Object.keys(validationErrors ?? {}) as VisualConfigFieldPath[]).some(
-      (field) => field !== 'port' && Boolean(validationErrors?.[field])
-    ) || hasPayloadValidationErrors;
+  const hasHiddenValidationIssues = hasValidationIssues;
   const payloadValidationKey = hasPayloadValidationErrors ? 'payload-errors' : 'payload-ok';
   const activeSection = sections.find((section) => section.id === activeSectionId) ?? sections[0];
 
@@ -553,34 +544,6 @@ export function VisualConfigEditor({
       inline: 'start',
     });
   }, []);
-
-  // Shared high-frequency field blocks — reused verbatim by both the simple view and full mode
-  // so the two layouts never drift apart.
-  const hostField = (
-    <FieldAnchor fieldId="host">
-      <Input
-        label={t('config_management.visual.sections.server.host')}
-        placeholder="0.0.0.0"
-        value={values.host}
-        onChange={(e) => onChange({ host: e.target.value })}
-        disabled={disabled}
-      />
-    </FieldAnchor>
-  );
-
-  const portField = (
-    <FieldAnchor fieldId="port">
-      <Input
-        label={t('config_management.visual.sections.server.port')}
-        type="number"
-        placeholder="8317"
-        value={values.port}
-        onChange={(e) => onChange({ port: e.target.value })}
-        disabled={disabled}
-        error={portError}
-      />
-    </FieldAnchor>
-  );
 
   const proxyUrlField = (
     <FieldAnchor fieldId="proxyUrl">
@@ -854,8 +817,6 @@ export function VisualConfigEditor({
           ) : null}
 
           <div className={styles.simpleForm}>
-            <div className={styles.simpleField}>{hostField}</div>
-            <div className={styles.simpleField}>{portField}</div>
             {apiKeysField}
             <div className={styles.simpleField}>{proxyUrlField}</div>
             {debugToggle}
@@ -924,67 +885,7 @@ export function VisualConfigEditor({
               description={t('config_management.visual.sections.connectivity.description')}
             >
               <SectionStack>
-                <SectionGrid>
-                  {hostField}
-                  {portField}
-                </SectionGrid>
-
-                <FieldAnchor fieldId="authDir">
-                  <Input
-                    label={t('config_management.visual.sections.auth.auth_dir')}
-                    placeholder="~/.cli-proxy-api"
-                    value={values.authDir}
-                    onChange={(e) => onChange({ authDir: e.target.value })}
-                    disabled={disabled}
-                    hint={t('config_management.visual.sections.auth.auth_dir_hint')}
-                  />
-                </FieldAnchor>
-
                 {apiKeysField}
-
-                <Collapsible
-                  label={t('config_management.visual.sections.tls.title')}
-                  hint={t('config_management.visual.sections.tls.description')}
-                  defaultOpen={false}
-                >
-                  <SectionStack>
-                    <FieldAnchor fieldId="tlsEnable">
-                      <ToggleRow
-                        title={t('config_management.visual.sections.tls.enable')}
-                        description={t('config_management.visual.sections.tls.enable_desc')}
-                        checked={values.tlsEnable}
-                        disabled={disabled}
-                        onChange={(tlsEnable) => onChange({ tlsEnable })}
-                      />
-                    </FieldAnchor>
-
-                    {values.tlsEnable ? (
-                      <>
-                        <Divider />
-                        <SectionGrid>
-                          <FieldAnchor fieldId="tlsCert">
-                            <Input
-                              label={t('config_management.visual.sections.tls.cert')}
-                              placeholder="/path/to/cert.pem"
-                              value={values.tlsCert}
-                              onChange={(e) => onChange({ tlsCert: e.target.value })}
-                              disabled={disabled}
-                            />
-                          </FieldAnchor>
-                          <FieldAnchor fieldId="tlsKey">
-                            <Input
-                              label={t('config_management.visual.sections.tls.key')}
-                              placeholder="/path/to/key.pem"
-                              value={values.tlsKey}
-                              onChange={(e) => onChange({ tlsKey: e.target.value })}
-                              disabled={disabled}
-                            />
-                          </FieldAnchor>
-                        </SectionGrid>
-                      </>
-                    ) : null}
-                  </SectionStack>
-                </Collapsible>
 
                 <Collapsible
                   label={t('config_management.visual.sections.remote.title')}

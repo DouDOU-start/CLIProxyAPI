@@ -176,14 +176,6 @@ function getNonNegativeIntegerError(value: string): 'non_negative_integer' | und
   return Number(trimmed) >= 0 ? undefined : 'non_negative_integer';
 }
 
-function getPortError(value: string): 'port_range' | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (!/^\d+$/.test(trimmed)) return 'port_range';
-  const parsed = Number(trimmed);
-  return parsed >= 1 && parsed <= 65535 ? undefined : 'port_range';
-}
-
 function getRedisRetentionError(value: string): 'integer_range_1_3600' | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -196,7 +188,6 @@ export function getVisualConfigValidationErrors(
   values: VisualConfigValues
 ): VisualConfigValidationErrors {
   return {
-    port: getPortError(values.port),
     errorLogsMaxFiles: getNonNegativeIntegerError(values.errorLogsMaxFiles),
     logsMaxTotalSizeMb: getNonNegativeIntegerError(values.logsMaxTotalSizeMb),
     redisUsageQueueRetentionSeconds: getRedisRetentionError(values.redisUsageQueueRetentionSeconds),
@@ -878,15 +869,9 @@ function getNextDirtyFields(
       'codexHeaderUserAgent',
       'codexHeaderBetaFeatures',
       'codexIdentityConfuse',
-      'host',
-      'port',
-      'tlsEnable',
-      'tlsCert',
-      'tlsKey',
       'rmAllowRemote',
       'rmEmail',
       'rmPassword',
-      'authDir',
       'apiKeysText',
       'debug',
       'commercialMode',
@@ -1051,7 +1036,6 @@ export function useVisualConfig() {
 
       const parsedRaw: unknown = parseYaml(yamlContent) || {};
       const parsed = asRecord(parsedRaw) ?? {};
-      const tls = asRecord(parsed.tls);
       const remoteManagement = asRecord(parsed['remote-management']);
       const quotaExceeded = asRecord(parsed['quota-exceeded']);
       const routing = asRecord(parsed.routing);
@@ -1063,18 +1047,10 @@ export function useVisualConfig() {
       const codexHeaderDefaults = asRecord(parsed['codex-header-defaults']);
 
       const newValues: VisualConfigValues = {
-        host: typeof parsed.host === 'string' ? parsed.host : '',
-        port: String(parsed.port ?? ''),
-
-        tlsEnable: Boolean(tls?.enable),
-        tlsCert: typeof tls?.cert === 'string' ? tls.cert : '',
-        tlsKey: typeof tls?.key === 'string' ? tls.key : '',
-
         rmAllowRemote: Boolean(remoteManagement?.['allow-remote']),
         rmEmail: typeof remoteManagement?.email === 'string' ? remoteManagement.email : '',
         rmPassword: '',
 
-        authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
         apiKeysText: resolveApiKeysText(parsed),
         pluginsEnabled: Boolean(plugins?.enabled),
         pluginStoreSources: parseStringList(plugins?.['store-sources']),
@@ -1188,21 +1164,6 @@ export function useVisualConfig() {
         const values = visualValues;
         const shouldWritePluginStoreAuth = dirtyFields.has('pluginStoreAuth');
 
-        if (dirtyFields.has('host')) setStringInDoc(doc, ['host'], values.host);
-        if (dirtyFields.has('port')) setIntFromStringInDoc(doc, ['port'], values.port);
-
-        const tlsDirty =
-          dirtyFields.has('tlsEnable') || dirtyFields.has('tlsCert') || dirtyFields.has('tlsKey');
-        if (tlsDirty) {
-          ensureMapInDoc(doc, ['tls']);
-          if (dirtyFields.has('tlsEnable')) {
-            setBooleanInDoc(doc, ['tls', 'enable'], values.tlsEnable);
-          }
-          if (dirtyFields.has('tlsCert')) setStringInDoc(doc, ['tls', 'cert'], values.tlsCert);
-          if (dirtyFields.has('tlsKey')) setStringInDoc(doc, ['tls', 'key'], values.tlsKey);
-          deleteIfMapEmpty(doc, ['tls']);
-        }
-
         const remoteManagementDirty =
           dirtyFields.has('rmAllowRemote') ||
           dirtyFields.has('rmEmail') ||
@@ -1221,7 +1182,6 @@ export function useVisualConfig() {
           deleteIfMapEmpty(doc, ['remote-management']);
         }
 
-        if (dirtyFields.has('authDir')) setStringInDoc(doc, ['auth-dir'], values.authDir);
         if (dirtyFields.has('apiKeysText')) {
           const apiKeys = values.apiKeysText
             .split('\n')

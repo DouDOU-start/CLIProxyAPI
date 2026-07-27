@@ -838,29 +838,19 @@
     "status_saving": "正在保存配置...",
     "status_saving_short": "保存中",
     "save_success": "配置已保存",
-    "visual_mode_unavailable": "YAML 语法修复前无法使用可视化编辑",
-    "visual_mode_unavailable_short": "YAML错误",
+    "visual_mode_unavailable": "配置数据无效",
+    "visual_mode_unavailable_short": "配置异常",
     "validation_blocked_short": "待修复",
-    "visual_mode_unavailable_detail": "当前配置存在无效 YAML，暂时无法使用可视化编辑：{{message}}",
-    "visual_mode_save_blocked": "请先修复 YAML 语法错误，再从可视化模式保存",
-    "visual_mode_latest_yaml_invalid": "服务端最新配置包含无效 YAML，请先切回源码模式检查后再保存可视化修改：{{message}}",
-    "editor_placeholder": "key: value",
-    "search_placeholder": "搜索配置内容...",
-    "search_button": "搜索",
-    "search_no_results": "无结果",
-    "search_prev": "上一个",
-    "search_next": "下一个",
+    "visual_mode_unavailable_detail": "已保存的配置数据无效，暂时无法显示：{{message}}",
+    "visual_mode_save_blocked": "配置数据无效，暂时无法保存",
+    "visual_mode_latest_yaml_invalid": "服务端最新配置数据无效，暂时无法保存：{{message}}",
     "diff": {
       "title": "确认变更",
       "confirm": "确认保存",
       "no_changes": "未检测到变更"
     },
-    "tabs": {
-      "visual": "可视化编辑",
-      "source": "源文件编辑"
-    },
     "visual": {
-      "notice": "可视化模式覆盖常用字段，未覆盖的配置仍需在源文件模式中查看或编辑。",
+      "notice": "配置通过可视化表单管理，保存后持久化到 PostgreSQL。",
       "quick_jump": "快速跳转",
       "mode": {
         "simple": "简单",
@@ -876,8 +866,8 @@
       },
       "sections": {
         "connectivity": {
-          "title": "接入与认证",
-          "description": "服务地址、端口、认证目录与 API 密钥"
+          "title": "认证与管理",
+          "description": "API 密钥与管理账号设置"
         },
         "logging": {
           "title": "日志与诊断",
@@ -889,20 +879,6 @@
           "plugins_title": "插件",
           "signature_title": "Antigravity 签名"
         },
-        "server": {
-          "title": "服务器配置",
-          "description": "基础服务器设置",
-          "host": "主机地址",
-          "port": "端口"
-        },
-        "tls": {
-          "title": "TLS/SSL 配置",
-          "description": "HTTPS 安全连接设置",
-          "enable": "启用 TLS",
-          "enable_desc": "启用 HTTPS 安全连接",
-          "cert": "证书文件路径",
-          "key": "私钥文件路径"
-        },
         "remote": {
           "title": "远程管理",
           "description": "管理账号和远程访问设置",
@@ -913,12 +889,6 @@
           "password": "新密码",
           "password_placeholder": "留空表示保持当前密码",
           "password_hint": "至少 8 个字符；修改密码后现有会话将失效。"
-        },
-        "auth": {
-          "title": "认证配置",
-          "description": "API 密钥与认证文件目录设置",
-          "auth_dir": "认证文件目录 (auth-dir)",
-          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）"
         },
         "system": {
           "title": "系统配置",
@@ -1120,7 +1090,6 @@
       },
       "validation": {
         "validation_blocked": "请先修复表单校验错误再保存",
-        "port_range": "请输入 1 到 65535 之间的有效端口",
         "non_negative_integer": "请输入非负整数",
         "integer_range_1_3600": "请输入 1 到 3600 之间的整数",
         "payload_invalid_number": "请输入有效数字",

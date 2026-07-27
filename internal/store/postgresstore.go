@@ -23,11 +23,7 @@ const (
 	defaultConfigTable  = "config_store"
 	defaultAuthTable    = "auth_store"
 	defaultConfigKey    = "config"
-	defaultSystemConfig = `host: ""
-port: 8317
-auth-dir: ""
-api-keys: []
-`
+	defaultSystemConfig = "api-keys: []\n"
 )
 
 // PostgresStoreConfig captures configuration required to initialize a Postgres-backed store.
@@ -468,7 +464,15 @@ func (s *PostgresStore) syncConfigFromDatabase(ctx context.Context) error {
 		if err = os.MkdirAll(filepath.Dir(s.configPath), 0o700); err != nil {
 			return fmt.Errorf("postgres store: prepare config directory: %w", err)
 		}
-		normalized := normalizeLineEndings(content)
+		normalized, errNormalize := normalizePersistentConfig([]byte(content))
+		if errNormalize != nil {
+			return errNormalize
+		}
+		if normalized != normalizeLineEndings(content) {
+			if errPersist := s.persistConfig(ctx, []byte(normalized)); errPersist != nil {
+				return errPersist
+			}
+		}
 		if err = os.WriteFile(s.configPath, []byte(normalized), 0o600); err != nil {
 			return fmt.Errorf("postgres store: write config to spool: %w", err)
 		}
@@ -589,16 +593,20 @@ func normalizePersistentConfig(data []byte) (string, error) {
 	}
 	if len(document.Content) > 0 && document.Content[0].Kind == yaml.MappingNode {
 		mapping := document.Content[0]
-		for index := 0; index+1 < len(mapping.Content); index += 2 {
-			if mapping.Content[index].Value != "auth-dir" {
-				continue
+		for _, key := range []string{
+			"host",
+			"port",
+			"tls",
+			"auth-dir",
+			"usage-statistics-enabled",
+		} {
+			removeYAMLMappingKey(mapping, key)
+		}
+		if plugins := yamlMappingValue(mapping, "plugins"); plugins != nil && plugins.Kind == yaml.MappingNode {
+			removeYAMLMappingKey(plugins, "dir")
+			if len(plugins.Content) == 0 {
+				removeYAMLMappingKey(mapping, "plugins")
 			}
-			value := mapping.Content[index+1]
-			value.Kind = yaml.ScalarNode
-			value.Tag = "!!str"
-			value.Value = ""
-			value.Content = nil
-			break
 		}
 	}
 	normalized, errMarshal := yaml.Marshal(&document)
@@ -606,6 +614,31 @@ func normalizePersistentConfig(data []byte) (string, error) {
 		return "", fmt.Errorf("postgres store: encode normalized config: %w", errMarshal)
 	}
 	return normalizeLineEndings(string(normalized)), nil
+}
+
+func yamlMappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index] != nil && mapping.Content[index].Value == key {
+			return mapping.Content[index+1]
+		}
+	}
+	return nil
+}
+
+func removeYAMLMappingKey(mapping *yaml.Node, key string) {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index] == nil || mapping.Content[index].Value != key {
+			continue
+		}
+		mapping.Content = append(mapping.Content[:index], mapping.Content[index+2:]...)
+		return
+	}
 }
 
 func (s *PostgresStore) deleteConfigRecord(ctx context.Context) error {

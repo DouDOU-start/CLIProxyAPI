@@ -8,7 +8,6 @@ export type PayloadParamValidationErrorCode =
   | 'payload_invalid_json';
 
 export type VisualConfigFieldPath =
-  | 'port'
   | 'errorLogsMaxFiles'
   | 'logsMaxTotalSizeMb'
   | 'redisUsageQueueRetentionSeconds'
@@ -20,10 +19,7 @@ export type VisualConfigFieldPath =
   | 'streaming.bootstrapRetries'
   | 'streaming.nonstreamKeepaliveInterval';
 
-export type VisualConfigValidationErrorCode =
-  | 'port_range'
-  | 'non_negative_integer'
-  | 'integer_range_1_3600';
+export type VisualConfigValidationErrorCode = 'non_negative_integer' | 'integer_range_1_3600';
 
 export type VisualConfigValidationErrors = Partial<
   Record<VisualConfigFieldPath, VisualConfigValidationErrorCode>
@@ -86,15 +82,9 @@ export type PluginStoreAuthRule = {
 };
 
 export type VisualConfigValues = {
-  host: string;
-  port: string;
-  tlsEnable: boolean;
-  tlsCert: string;
-  tlsKey: string;
   rmAllowRemote: boolean;
   rmEmail: string;
   rmPassword: string;
-  authDir: string;
   apiKeysText: string;
   pluginsEnabled: boolean;
   pluginStoreSources: string[];
@@ -148,15 +138,9 @@ export const makeClientId = () => {
 };
 
 export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
-  host: '',
-  port: '',
-  tlsEnable: false,
-  tlsCert: '',
-  tlsKey: '',
   rmAllowRemote: false,
   rmEmail: '',
   rmPassword: '',
-  authDir: '',
   apiKeysText: '',
   pluginsEnabled: false,
   pluginStoreSources: [],

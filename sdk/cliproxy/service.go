@@ -1414,7 +1414,23 @@ func (s *Service) applyConfigUpdate(newCfg *config.Config) {
 }
 
 func (s *Service) applyWatcherConfigUpdate(newCfg *config.Config) {
+	if s != nil && newCfg != nil {
+		s.cfgMu.RLock()
+		currentCfg := s.cfg
+		s.cfgMu.RUnlock()
+		preserveLocalStartupConfig(currentCfg, newCfg)
+	}
 	s.applyConfigUpdateWithAuthSynthesis(context.Background(), newCfg, false)
+}
+
+func preserveLocalStartupConfig(currentCfg, newCfg *config.Config) {
+	if currentCfg == nil || newCfg == nil {
+		return
+	}
+	newCfg.Host = currentCfg.Host
+	newCfg.Port = currentCfg.Port
+	newCfg.AuthDir = currentCfg.AuthDir
+	newCfg.Plugins.Dir = currentCfg.Plugins.Dir
 }
 
 type configCommit struct {
@@ -1737,7 +1753,6 @@ func (s *Service) stageHomeOverlayWithClient(ctx context.Context, remoteCfg *con
 	merged := *remoteCfg
 	merged.Host = baseCfg.Host
 	merged.Port = baseCfg.Port
-	merged.TLS = baseCfg.TLS
 	merged.Home = baseCfg.Home
 	storeAuth := merged.Plugins.StoreAuth
 	forceHomeRuntimeConfig(&merged)

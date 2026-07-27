@@ -864,29 +864,19 @@
     "status_saving": "正在儲存設定...",
     "status_saving_short": "儲存中",
     "save_success": "設定已儲存",
-    "visual_mode_unavailable": "YAML 語法修復前無法使用視覺化編輯",
-    "visual_mode_unavailable_short": "YAML 錯誤",
+    "visual_mode_unavailable": "設定資料無效",
+    "visual_mode_unavailable_short": "設定異常",
     "validation_blocked_short": "待修復",
-    "visual_mode_unavailable_detail": "目前設定存在無效 YAML，暫時無法使用視覺化編輯：{{message}}",
-    "visual_mode_save_blocked": "請先修復 YAML 語法錯誤，再從視覺化模式儲存",
-    "visual_mode_latest_yaml_invalid": "伺服器最新設定包含無效 YAML，請先切回原始碼模式檢查後再儲存視覺化修改：{{message}}",
-    "editor_placeholder": "key: value",
-    "search_placeholder": "搜尋設定內容...",
-    "search_button": "搜尋",
-    "search_no_results": "無結果",
-    "search_prev": "上一個",
-    "search_next": "下一個",
+    "visual_mode_unavailable_detail": "已儲存的設定資料無效，暫時無法顯示：{{message}}",
+    "visual_mode_save_blocked": "設定資料無效，暫時無法儲存",
+    "visual_mode_latest_yaml_invalid": "伺服器最新設定資料無效，暫時無法儲存：{{message}}",
     "diff": {
       "title": "確認變更",
       "confirm": "確認儲存",
       "no_changes": "未偵測到變更"
     },
-    "tabs": {
-      "visual": "視覺化編輯",
-      "source": "原始檔編輯"
-    },
     "visual": {
-      "notice": "視覺化模式涵蓋常用欄位，未涵蓋的設定仍需在原始檔模式中查看或編輯。",
+      "notice": "設定透過視覺化表單管理，儲存後持久化到 PostgreSQL。",
       "quick_jump": "快速跳轉",
       "mode": {
         "simple": "簡單",
@@ -902,8 +892,8 @@
       },
       "sections": {
         "connectivity": {
-          "title": "接入與認證",
-          "description": "服務位址、連接埠、認證目錄與 API 金鑰"
+          "title": "認證與管理",
+          "description": "API 金鑰與管理帳號設定"
         },
         "logging": {
           "title": "日誌與診斷",
@@ -915,20 +905,6 @@
           "plugins_title": "外掛",
           "signature_title": "Antigravity 簽章"
         },
-        "server": {
-          "title": "伺服器設定",
-          "description": "基本伺服器設定",
-          "host": "主機位址",
-          "port": "連接埠"
-        },
-        "tls": {
-          "title": "TLS/SSL 設定",
-          "description": "HTTPS 安全連線設定",
-          "enable": "啟用 TLS",
-          "enable_desc": "啟用 HTTPS 安全連線",
-          "cert": "憑證檔案路徑",
-          "key": "私鑰檔案路徑"
-        },
         "remote": {
           "title": "遠端管理",
           "description": "管理帳號和遠端存取設定",
@@ -939,12 +915,6 @@
           "password": "新密碼",
           "password_placeholder": "留空表示保留目前密碼",
           "password_hint": "至少 8 個字元；修改密碼後目前工作階段將失效。"
-        },
-        "auth": {
-          "title": "驗證設定",
-          "description": "API 金鑰與驗證檔案目錄設定",
-          "auth_dir": "驗證檔案目錄（auth-dir）",
-          "auth_dir_hint": "存放驗證檔案的目錄路徑（支援 ~）"
         },
         "system": {
           "title": "系統設定",
@@ -1146,7 +1116,6 @@
       },
       "validation": {
         "validation_blocked": "請先修復表單驗證錯誤再儲存",
-        "port_range": "請輸入 1 到 65535 之間的有效連接埠",
         "non_negative_integer": "請輸入非負整數",
         "integer_range_1_3600": "請輸入 1 到 3600 之間的整數",
         "payload_invalid_number": "請輸入有效數字",

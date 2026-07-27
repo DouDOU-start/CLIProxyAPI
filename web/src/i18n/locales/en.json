@@ -838,29 +838,19 @@
     "status_saving": "Saving configuration...",
     "status_saving_short": "Saving",
     "save_success": "Configuration saved successfully",
-    "visual_mode_unavailable": "Visual editor unavailable until YAML syntax is fixed",
-    "visual_mode_unavailable_short": "YAML issue",
+    "visual_mode_unavailable": "Configuration data is invalid",
+    "visual_mode_unavailable_short": "Config issue",
     "validation_blocked_short": "Fix errors",
-    "visual_mode_unavailable_detail": "Visual editor is unavailable because the configuration contains invalid YAML: {{message}}",
-    "visual_mode_save_blocked": "Cannot save from visual mode until the YAML syntax is fixed",
-    "visual_mode_latest_yaml_invalid": "The latest server configuration contains invalid YAML. Review it in source mode before saving visual changes: {{message}}",
-    "editor_placeholder": "key: value",
-    "search_placeholder": "Search config...",
-    "search_button": "Search",
-    "search_no_results": "No results",
-    "search_prev": "Previous",
-    "search_next": "Next",
+    "visual_mode_unavailable_detail": "The stored configuration data is invalid and cannot be displayed: {{message}}",
+    "visual_mode_save_blocked": "Cannot save while the stored configuration data is invalid",
+    "visual_mode_latest_yaml_invalid": "The latest server configuration data is invalid and cannot be saved: {{message}}",
     "diff": {
       "title": "Review Changes",
       "confirm": "Confirm Save",
       "no_changes": "No changes detected"
     },
-    "tabs": {
-      "visual": "Visual Editor",
-      "source": "Source File Editor"
-    },
     "visual": {
-      "notice": "Visual mode covers common fields. Review or edit unsupported config.yaml entries in source mode.",
+      "notice": "Configuration is managed through visual forms and persisted to PostgreSQL.",
       "quick_jump": "Quick Jump",
       "mode": {
         "simple": "Simple",
@@ -876,8 +866,8 @@
       },
       "sections": {
         "connectivity": {
-          "title": "Access & Authentication",
-          "description": "Server address, port, auth directory, and API keys"
+          "title": "Authentication & Management",
+          "description": "API keys and management account settings"
         },
         "logging": {
           "title": "Logging & Diagnostics",
@@ -889,20 +879,6 @@
           "plugins_title": "Plugins",
           "signature_title": "Antigravity Signature"
         },
-        "server": {
-          "title": "Server Configuration",
-          "description": "Basic server settings",
-          "host": "Host Address",
-          "port": "Port"
-        },
-        "tls": {
-          "title": "TLS/SSL Configuration",
-          "description": "HTTPS secure connection settings",
-          "enable": "Enable TLS",
-          "enable_desc": "Enable HTTPS secure connection",
-          "cert": "Certificate File Path",
-          "key": "Private Key File Path"
-        },
         "remote": {
           "title": "Remote Management",
           "description": "Management account and remote access settings",
@@ -913,12 +889,6 @@
           "password": "New Password",
           "password_placeholder": "Leave blank to keep the current password",
           "password_hint": "Use at least 8 characters. Saving a new password ends existing sessions."
-        },
-        "auth": {
-          "title": "Authentication Configuration",
-          "description": "API keys and authentication directory settings",
-          "auth_dir": "Auth Directory (auth-dir)",
-          "auth_dir_hint": "Directory path for authentication files (supports ~)"
         },
         "system": {
           "title": "System Configuration",
@@ -1120,7 +1090,6 @@
       },
       "validation": {
         "validation_blocked": "Fix validation errors before saving",
-        "port_range": "Enter a valid port between 1 and 65535",
         "non_negative_integer": "Enter a non-negative whole number",
         "integer_range_1_3600": "Enter a whole number between 1 and 3600",
         "payload_invalid_number": "Enter a valid number",

@@ -6,7 +6,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,7 +47,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 	managementweb "github.com/router-for-me/CLIProxyAPI/v7/web"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1716,7 +1714,7 @@ func homeModelInt64Value(model map[string]any, keys ...string) int64 {
 	return 0
 }
 
-// Start begins listening for and serving HTTP or HTTPS requests.
+// Start begins listening for and serving HTTP requests.
 // It's a blocking call and will only return on an unrecoverable error.
 //
 // Returns:
@@ -1732,37 +1730,7 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to start HTTP server: %v", errListen)
 	}
 
-	useTLS := s.cfg != nil && s.cfg.TLS.Enable
-	if useTLS {
-		certPath := strings.TrimSpace(s.cfg.TLS.Cert)
-		keyPath := strings.TrimSpace(s.cfg.TLS.Key)
-		if certPath == "" || keyPath == "" {
-			if errClose := listener.Close(); errClose != nil {
-				log.Errorf("failed to close listener after TLS validation failure: %v", errClose)
-			}
-			return fmt.Errorf("failed to start HTTPS server: tls.cert or tls.key is empty")
-		}
-		certPair, errLoad := tls.LoadX509KeyPair(certPath, keyPath)
-		if errLoad != nil {
-			if errClose := listener.Close(); errClose != nil {
-				log.Errorf("failed to close listener after TLS key pair load failure: %v", errClose)
-			}
-			return fmt.Errorf("failed to start HTTPS server: %v", errLoad)
-		}
-
-		tlsConfig := &tls.Config{
-			Certificates: []tls.Certificate{certPair},
-			NextProtos:   []string{"h2", "http/1.1"},
-		}
-		s.server.TLSConfig = tlsConfig
-		if errHTTP2 := http2.ConfigureServer(s.server, &http2.Server{}); errHTTP2 != nil {
-			log.Warnf("failed to configure HTTP/2: %v", errHTTP2)
-		}
-		listener = tls.NewListener(listener, tlsConfig)
-		log.Debugf("Starting API server on %s with TLS", addr)
-	} else {
-		log.Debugf("Starting API server on %s", addr)
-	}
+	log.Debugf("Starting API server on %s", addr)
 
 	httpListener := newMuxListener(listener.Addr(), 1024)
 	s.muxBaseListener = listener
