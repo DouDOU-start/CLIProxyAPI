@@ -894,19 +894,6 @@ export function VisualConfigEditor({
                 >
                   <SectionStack>
                     <SectionGrid>
-                      <FieldAnchor fieldId="rmAllowRemote">
-                        <ToggleRow
-                          title={t('config_management.visual.sections.remote.allow_remote')}
-                          description={t(
-                            'config_management.visual.sections.remote.allow_remote_desc'
-                          )}
-                          checked={values.rmAllowRemote}
-                          disabled={disabled}
-                          onChange={(rmAllowRemote) => onChange({ rmAllowRemote })}
-                        />
-                      </FieldAnchor>
-                    </SectionGrid>
-                    <SectionGrid>
                       <FieldAnchor fieldId="rmEmail">
                         <Input
                           label={t('config_management.visual.sections.remote.email')}

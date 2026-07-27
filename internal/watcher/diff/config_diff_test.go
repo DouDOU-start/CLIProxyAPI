@@ -15,9 +15,8 @@ func TestBuildConfigChangeDetails(t *testing.T) {
 			{APIKey: "old", BaseURL: "http://old", ExcludedModels: []string{"old-model"}},
 		},
 		RemoteManagement: config.RemoteManagement{
-			AllowRemote: false,
-			Email:       "old@example.com",
-			Password:    "old-password",
+			Email:    "old@example.com",
+			Password: "old-password",
 		},
 		OAuthExcludedModels: map[string][]string{
 			"providerA": {"m1"},
@@ -40,9 +39,8 @@ func TestBuildConfigChangeDetails(t *testing.T) {
 			{APIKey: "old", BaseURL: "http://old", ExcludedModels: []string{"old-model", "extra"}},
 		},
 		RemoteManagement: config.RemoteManagement{
-			AllowRemote: true,
-			Email:       "new@example.com",
-			Password:    "new-password",
+			Email:    "new@example.com",
+			Password: "new-password",
 		},
 		OAuthExcludedModels: map[string][]string{
 			"providerA": {"m1", "m2"},
@@ -70,7 +68,6 @@ func TestBuildConfigChangeDetails(t *testing.T) {
 	expectContains(t, details, "port: 8080 -> 9090")
 	expectContains(t, details, "auth-dir: /tmp/auth-old -> /tmp/auth-new")
 	expectContains(t, details, "gemini[0].excluded-models: updated (1 -> 2 entries)")
-	expectContains(t, details, "remote-management.allow-remote: false -> true")
 	expectContains(t, details, "remote-management.email: updated (redacted)")
 	expectContains(t, details, "remote-management.password: updated")
 	expectContains(t, details, "oauth-excluded-models[providera]: updated (1 -> 2 entries)")
@@ -354,9 +351,8 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 			{APIKey: "v-old", BaseURL: "http://v-old", ProxyURL: "http://vp-old", Headers: map[string]string{"H": "1"}, Models: []config.VertexCompatModel{{Name: "m1"}}},
 		},
 		RemoteManagement: config.RemoteManagement{
-			AllowRemote: false,
-			Email:       "old@example.com",
-			Password:    "old-password",
+			Email:    "old@example.com",
+			Password: "old-password",
 		},
 		SDKConfig: sdkconfig.SDKConfig{
 			RequestLog: false,
@@ -401,9 +397,8 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 			{APIKey: "v-new", BaseURL: "http://v-new", ProxyURL: "http://vp-new", Headers: map[string]string{"H": "2"}, Models: []config.VertexCompatModel{{Name: "m1"}, {Name: "m2"}}},
 		},
 		RemoteManagement: config.RemoteManagement{
-			AllowRemote: true,
-			Email:       "new@example.com",
-			Password:    "",
+			Email:    "new@example.com",
+			Password: "",
 		},
 		SDKConfig: sdkconfig.SDKConfig{
 			RequestLog:             true,
@@ -469,7 +464,6 @@ func TestBuildConfigChangeDetails_AllBranches(t *testing.T) {
 	expectContains(t, changes, "vertex[0].headers: updated")
 	expectContains(t, changes, "oauth-excluded-models[p1]: updated (1 -> 2 entries)")
 	expectContains(t, changes, "oauth-excluded-models[p2]: added (1 entries)")
-	expectContains(t, changes, "remote-management.allow-remote: false -> true")
 	expectContains(t, changes, "remote-management.email: updated (redacted)")
 	expectContains(t, changes, "remote-management.password: deleted")
 	expectContains(t, changes, "openai-compatibility:")

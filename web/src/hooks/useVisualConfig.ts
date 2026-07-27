@@ -869,7 +869,6 @@ function getNextDirtyFields(
       'codexHeaderUserAgent',
       'codexHeaderBetaFeatures',
       'codexIdentityConfuse',
-      'rmAllowRemote',
       'rmEmail',
       'rmPassword',
       'apiKeysText',
@@ -1047,7 +1046,6 @@ export function useVisualConfig() {
       const codexHeaderDefaults = asRecord(parsed['codex-header-defaults']);
 
       const newValues: VisualConfigValues = {
-        rmAllowRemote: Boolean(remoteManagement?.['allow-remote']),
         rmEmail: typeof remoteManagement?.email === 'string' ? remoteManagement.email : '',
         rmPassword: '',
 
@@ -1164,23 +1162,21 @@ export function useVisualConfig() {
         const values = visualValues;
         const shouldWritePluginStoreAuth = dirtyFields.has('pluginStoreAuth');
 
+        if (docHas(doc, ['remote-management', 'allow-remote'])) {
+          doc.deleteIn(['remote-management', 'allow-remote']);
+        }
         const remoteManagementDirty =
-          dirtyFields.has('rmAllowRemote') ||
-          dirtyFields.has('rmEmail') ||
-          dirtyFields.has('rmPassword');
+          dirtyFields.has('rmEmail') || dirtyFields.has('rmPassword');
         if (remoteManagementDirty) {
           ensureMapInDoc(doc, ['remote-management']);
-          if (dirtyFields.has('rmAllowRemote')) {
-            setBooleanInDoc(doc, ['remote-management', 'allow-remote'], values.rmAllowRemote);
-          }
           if (dirtyFields.has('rmEmail')) {
             setStringInDoc(doc, ['remote-management', 'email'], values.rmEmail);
           }
           if (dirtyFields.has('rmPassword') && values.rmPassword.trim() !== '') {
             setStringInDoc(doc, ['remote-management', 'password'], values.rmPassword);
           }
-          deleteIfMapEmpty(doc, ['remote-management']);
         }
+        deleteIfMapEmpty(doc, ['remote-management']);
 
         if (dirtyFields.has('apiKeysText')) {
           const apiKeys = values.apiKeysText

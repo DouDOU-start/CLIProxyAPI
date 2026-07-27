@@ -325,9 +325,6 @@ func BuildConfigChangeDetails(oldCfg, newCfg *config.Config) []string {
 	}
 
 	// Remote management credentials are always redacted.
-	if oldCfg.RemoteManagement.AllowRemote != newCfg.RemoteManagement.AllowRemote {
-		changes = append(changes, fmt.Sprintf("remote-management.allow-remote: %t -> %t", oldCfg.RemoteManagement.AllowRemote, newCfg.RemoteManagement.AllowRemote))
-	}
 	if oldCfg.RemoteManagement.Email != newCfg.RemoteManagement.Email {
 		changes = append(changes, "remote-management.email: updated (redacted)")
 	}

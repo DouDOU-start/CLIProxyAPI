@@ -78,8 +78,6 @@
     "setup_password_placeholder": "至少 8 位，最多 72 字节",
     "confirm_password_label": "确认密码",
     "confirm_password_placeholder": "再次输入密码",
-    "allow_remote_label": "允许从其他设备访问管理中心",
-    "allow_remote_forced": "当前通过远程地址访问，将自动启用远程管理",
     "setup_security_note": "创建成功后，初始化入口会立即关闭；密码将加密存储在 PostgreSQL。",
     "remember_session_label": "保持登录 30 天",
     "show_password": "显示密码",
@@ -851,10 +849,8 @@
           "signature_title": "Antigravity 签名"
         },
         "remote": {
-          "title": "远程管理",
-          "description": "管理账号和远程访问设置",
-          "allow_remote": "允许远程访问",
-          "allow_remote_desc": "允许从其他主机访问管理接口",
+          "title": "管理账号",
+          "description": "管理控制台登录凭证",
           "email": "管理员邮箱",
           "email_placeholder": "admin@example.com",
           "password": "新密码",

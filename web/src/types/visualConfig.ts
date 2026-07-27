@@ -82,7 +82,6 @@ export type PluginStoreAuthRule = {
 };
 
 export type VisualConfigValues = {
-  rmAllowRemote: boolean;
   rmEmail: string;
   rmPassword: string;
   apiKeysText: string;
@@ -138,7 +137,6 @@ export const makeClientId = () => {
 };
 
 export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
-  rmAllowRemote: false,
   rmEmail: '',
   rmPassword: '',
   apiKeysText: '',

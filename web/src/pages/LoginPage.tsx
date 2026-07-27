@@ -77,7 +77,6 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(storedRememberSession);
-  const [allowRemote, setAllowRemote] = useState(false);
   const [setupStatus, setSetupStatus] = useState<ManagementSetupStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(true);
@@ -114,7 +113,6 @@ export function LoginPage() {
         const status = await apiClient.getManagementSetupStatus();
         if (!active) return;
         setSetupStatus(status);
-        if (status.remote_client) setAllowRemote(true);
       } catch (setupError: unknown) {
         if (active) setError(getLocalizedErrorMessage(setupError, t));
       } finally {
@@ -153,7 +151,6 @@ export function LoginPage() {
           email: email.trim().toLowerCase(),
           password,
           confirm_password: confirmPassword,
-          allow_remote: allowRemote,
         });
       }
       await login({ email, password, rememberSession });
@@ -288,21 +285,7 @@ export function LoginPage() {
               )}
 
               {setupRequired && (
-                <div className={styles.setupOptions}>
-                  <SelectionCheckbox
-                    checked={allowRemote}
-                    onChange={setAllowRemote}
-                    disabled={setupStatus?.remote_client === true}
-                    ariaLabel={t('login.allow_remote_label')}
-                    label={
-                      setupStatus?.remote_client
-                        ? t('login.allow_remote_forced')
-                        : t('login.allow_remote_label')
-                    }
-                    labelClassName={styles.toggleLabel}
-                  />
-                  <p className={styles.setupSecurityNote}>{t('login.setup_security_note')}</p>
-                </div>
+                <p className={styles.setupSecurityNote}>{t('login.setup_security_note')}</p>
               )}
 
               <SelectionCheckbox

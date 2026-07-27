@@ -1695,7 +1695,6 @@ func forceHomeRuntimeConfig(cfg *config.Config) {
 	cfg.DisableCooling = true
 	cfg.SaveCooldownStatus = false
 	cfg.WebsocketAuth = false
-	cfg.RemoteManagement.AllowRemote = false
 	cfg.Plugins.StoreAuth = nil
 }
 

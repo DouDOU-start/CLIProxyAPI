@@ -26,7 +26,7 @@ func TestAuthenticateManagementCredentialsLocalhostBanBlocksValidLogin(t *testin
 	h := newSessionTestHandler()
 
 	for i := 0; i < managementMaxFailures; i++ {
-		allowed, statusCode, errMsg := h.AuthenticateManagementCredentials("127.0.0.1", true, "admin@example.com", "wrong-password")
+		allowed, statusCode, errMsg := h.AuthenticateManagementCredentials("127.0.0.1", "admin@example.com", "wrong-password")
 		if allowed {
 			t.Fatalf("expected auth to be denied at attempt %d", i+1)
 		}
@@ -35,7 +35,7 @@ func TestAuthenticateManagementCredentialsLocalhostBanBlocksValidLogin(t *testin
 		}
 	}
 
-	allowed, statusCode, errMsg := h.AuthenticateManagementCredentials("127.0.0.1", true, "admin@example.com", "test-password-123")
+	allowed, statusCode, errMsg := h.AuthenticateManagementCredentials("127.0.0.1", "admin@example.com", "test-password-123")
 	if allowed {
 		t.Fatal("expected valid credentials to be denied while blocked")
 	}

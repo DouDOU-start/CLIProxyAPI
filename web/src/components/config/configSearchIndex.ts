@@ -49,13 +49,6 @@ export const CONFIG_FIELD_SEARCH_INDEX: ConfigFieldSearchEntry[] = [
     keywords: ['api key', 'apikey', 'token'],
   },
   {
-    fieldId: 'rmAllowRemote',
-    sectionId: 'connectivity',
-    labelKey: L('sections.remote.allow_remote'),
-    hintKey: L('sections.remote.allow_remote_desc'),
-    yamlKeys: ['remote-management', 'allow-remote'],
-  },
-  {
     fieldId: 'rmEmail',
     sectionId: 'connectivity',
     labelKey: L('sections.remote.email'),

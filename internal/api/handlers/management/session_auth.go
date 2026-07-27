@@ -41,7 +41,6 @@ type managementCredentials struct {
 	Email       string
 	Password    string
 	PasswordRaw bool
-	AllowRemote bool
 	Fingerprint string
 }
 
@@ -56,7 +55,6 @@ func (h *Handler) configuredManagementCredentials() (managementCredentials, bool
 		credentials.Email = strings.ToLower(strings.TrimSpace(h.cfg.RemoteManagement.Email))
 		credentials.Password = strings.TrimSpace(h.cfg.RemoteManagement.Password)
 		credentials.PasswordRaw = !looksLikeBcryptPassword(credentials.Password)
-		credentials.AllowRemote = h.cfg.RemoteManagement.AllowRemote
 	}
 	h.mu.Unlock()
 
@@ -101,8 +99,7 @@ func (h *Handler) GetSetupStatus(c *gin.Context) {
 	}
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
-		"required":      h.managementSetupRequired(),
-		"remote_client": !isLocalManagementClient(c.ClientIP()),
+		"required": h.managementSetupRequired(),
 	})
 }
 
@@ -125,7 +122,6 @@ func (h *Handler) Setup(c *gin.Context) {
 		Email           string `json:"email"`
 		Password        string `json:"password"`
 		ConfirmPassword string `json:"confirm_password"`
-		AllowRemote     bool   `json:"allow_remote"`
 	}
 	if errBind := c.ShouldBindJSON(&body); errBind != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "email, password, and password confirmation are required"})
@@ -156,7 +152,6 @@ func (h *Handler) Setup(c *gin.Context) {
 		return
 	}
 
-	allowRemote := body.AllowRemote || !isLocalManagementClient(c.ClientIP())
 	h.mu.Lock()
 	if !h.managementSetupRequiredLocked() {
 		h.mu.Unlock()
@@ -165,9 +160,8 @@ func (h *Handler) Setup(c *gin.Context) {
 	}
 	previous := h.cfg.RemoteManagement
 	h.cfg.RemoteManagement = config.RemoteManagement{
-		AllowRemote: allowRemote,
-		Email:       email,
-		Password:    string(hashedPassword),
+		Email:    email,
+		Password: string(hashedPassword),
 	}
 	if errSave := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); errSave != nil {
 		h.cfg.RemoteManagement = previous
@@ -192,9 +186,8 @@ func (h *Handler) Setup(c *gin.Context) {
 	h.mu.Unlock()
 	h.reloadConfigAfterManagementSaveAsync(c.Request.Context(), snapshot)
 	c.JSON(http.StatusCreated, gin.H{
-		"status":       "created",
-		"email":        email,
-		"allow_remote": allowRemote,
+		"status": "created",
+		"email":  email,
 	})
 }
 
@@ -232,10 +225,6 @@ func (h *Handler) Login(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	clientIP := c.ClientIP()
 	credentials, configured := h.configuredManagementCredentials()
-	if !isLocalManagementClient(clientIP) && !credentials.AllowRemote {
-		c.JSON(http.StatusForbidden, gin.H{"error": "remote_management_disabled", "message": "remote management is disabled"})
-		return
-	}
 	if !configured {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "management_credentials_not_configured", "message": "management email and password are not configured"})
 		return
@@ -287,11 +276,8 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 // AuthenticateManagementCredentials verifies management credentials for non-HTTP transports.
-func (h *Handler) AuthenticateManagementCredentials(clientIP string, localClient bool, email, password string) (bool, int, string) {
+func (h *Handler) AuthenticateManagementCredentials(clientIP, email, password string) (bool, int, string) {
 	credentials, configured := h.configuredManagementCredentials()
-	if !localClient && !credentials.AllowRemote {
-		return false, http.StatusForbidden, "remote management is disabled"
-	}
 	if !configured {
 		return false, http.StatusServiceUnavailable, "management email and password are not configured"
 	}
@@ -335,12 +321,7 @@ func (h *Handler) authenticateSession(c *gin.Context, requireCSRF bool) (*manage
 	if h == nil || c == nil {
 		return nil, false
 	}
-	clientIP := c.ClientIP()
 	credentials, configured := h.configuredManagementCredentials()
-	if !isLocalManagementClient(clientIP) && !credentials.AllowRemote {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "remote_management_disabled", "message": "remote management is disabled"})
-		return nil, false
-	}
 	if !configured {
 		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "management_credentials_not_configured", "message": "management email and password are not configured"})
 		return nil, false
@@ -500,10 +481,6 @@ func (h *Handler) clearManagementSessionCookie(c *gin.Context) {
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
 	})
-}
-
-func isLocalManagementClient(clientIP string) bool {
-	return clientIP == "127.0.0.1" || clientIP == "::1"
 }
 
 func secureRandomToken(size int) (string, error) {

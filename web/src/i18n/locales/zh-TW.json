@@ -78,8 +78,6 @@
     "setup_password_placeholder": "至少 8 位，最多 72 位元組",
     "confirm_password_label": "確認密碼",
     "confirm_password_placeholder": "再次輸入密碼",
-    "allow_remote_label": "允許從其他裝置存取管理中心",
-    "allow_remote_forced": "目前透過遠端位址存取，將自動啟用遠端管理",
     "setup_security_note": "建立成功後，初始化入口會立即關閉；密碼將加密儲存在 PostgreSQL。",
     "remember_session_label": "保持登入 30 天",
     "show_password": "顯示密碼",
@@ -877,10 +875,8 @@
           "signature_title": "Antigravity 簽章"
         },
         "remote": {
-          "title": "遠端管理",
-          "description": "管理帳號和遠端存取設定",
-          "allow_remote": "允許遠端存取",
-          "allow_remote_desc": "允許從其他主機存取管理介面",
+          "title": "管理帳號",
+          "description": "管理控制台登入憑證",
           "email": "管理員電子郵件",
           "email_placeholder": "admin@example.com",
           "password": "新密碼",

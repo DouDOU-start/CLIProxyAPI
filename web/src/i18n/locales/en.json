@@ -78,8 +78,6 @@
     "setup_password_placeholder": "8 characters minimum, 72 bytes maximum",
     "confirm_password_label": "Confirm password",
     "confirm_password_placeholder": "Enter the password again",
-    "allow_remote_label": "Allow management access from other devices",
-    "allow_remote_forced": "You are connecting remotely, so remote management will be enabled",
     "setup_security_note": "The setup entry closes immediately after creation. The password is encrypted before it is stored in PostgreSQL.",
     "remember_session_label": "Keep me signed in for 30 days",
     "show_password": "Show password",
@@ -851,10 +849,8 @@
           "signature_title": "Antigravity Signature"
         },
         "remote": {
-          "title": "Remote Management",
-          "description": "Management account and remote access settings",
-          "allow_remote": "Allow Remote Access",
-          "allow_remote_desc": "Allow management access from other hosts",
+          "title": "Management Account",
+          "description": "Manage console sign-in credentials",
           "email": "Administrator Email",
           "email_placeholder": "admin@example.com",
           "password": "New Password",

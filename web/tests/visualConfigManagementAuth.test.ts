@@ -52,6 +52,7 @@ describe('visual config management account', () => {
     const merged = parseYaml(markup.slice('<pre>'.length, -'</pre>'.length));
     expect(merged['remote-management'].email).toBe('next@example.com');
     expect(merged['remote-management'].password).toBe('$2b$10$existingHash');
+    expect(merged['remote-management']['allow-remote']).toBeUndefined();
   });
 
   test('writes a new password only after it is entered', () => {

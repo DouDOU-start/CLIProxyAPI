@@ -40,7 +40,7 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 		reader = bufio.NewReader(conn)
 	}
 
-	clientIP, localClient := resolveRemoteIP(conn.RemoteAddr())
+	clientIP := resolveRemoteIP(conn.RemoteAddr())
 	authed := false
 	writer := bufio.NewWriter(conn)
 	defer func() {
@@ -111,7 +111,7 @@ func (s *Server) handleRedisConnection(conn net.Conn, reader *bufio.Reader) {
 				}
 				continue
 			}
-			allowed, _, errMsg := s.mgmt.AuthenticateManagementCredentials(clientIP, localClient, email, password)
+			allowed, _, errMsg := s.mgmt.AuthenticateManagementCredentials(clientIP, email, password)
 			if !allowed {
 				_ = writeRedisError(writer, "ERR "+errMsg)
 				if !flush() {
@@ -320,9 +320,9 @@ func handleRedisSubscriptionCommand(writer *bufio.Writer, channel string, comman
 	}
 }
 
-func resolveRemoteIP(addr net.Addr) (ip string, localClient bool) {
+func resolveRemoteIP(addr net.Addr) string {
 	if addr == nil {
-		return "", false
+		return ""
 	}
 
 	var host string
@@ -354,8 +354,7 @@ func resolveRemoteIP(addr net.Addr) (ip string, localClient bool) {
 	}
 
 	host = strings.TrimSpace(host)
-	localClient = host == "127.0.0.1" || host == "::1"
-	return host, localClient
+	return host
 }
 
 func parseAuthCredentials(args []string) (string, string, bool) {

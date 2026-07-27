@@ -23,8 +23,7 @@ type sessionLoginResponse struct {
 }
 
 type setupStatusResponse struct {
-	Required     bool `json:"required"`
-	RemoteClient bool `json:"remote_client"`
+	Required bool `json:"required"`
 }
 
 func newManagementSetupTestHandler(t *testing.T) (*Handler, string) {
@@ -65,11 +64,11 @@ func TestManagementFirstRunSetupCreatesAdministrator(t *testing.T) {
 	if errDecode := json.Unmarshal(statusRec.Body.Bytes(), &setupStatus); errDecode != nil {
 		t.Fatalf("decode setup status: %v", errDecode)
 	}
-	if !setupStatus.Required || !setupStatus.RemoteClient {
+	if !setupStatus.Required {
 		t.Fatalf("unexpected setup status: %#v", setupStatus)
 	}
 
-	setupBody := `{"email":"Admin@Example.com","password":"test-password-123","confirm_password":"test-password-123","allow_remote":false}`
+	setupBody := `{"email":"Admin@Example.com","password":"test-password-123","confirm_password":"test-password-123"}`
 	setupReq := httptest.NewRequest(http.MethodPost, "/v0/management/auth/setup", strings.NewReader(setupBody))
 	setupReq.RemoteAddr = "192.0.2.10:12345"
 	setupReq.Header.Set("Content-Type", "application/json")
@@ -82,7 +81,7 @@ func TestManagementFirstRunSetupCreatesAdministrator(t *testing.T) {
 	if persistCalls != 1 {
 		t.Fatalf("persist calls = %d, want 1", persistCalls)
 	}
-	if h.cfg.RemoteManagement.Email != "admin@example.com" || !h.cfg.RemoteManagement.AllowRemote {
+	if h.cfg.RemoteManagement.Email != "admin@example.com" {
 		t.Fatalf("unexpected management config: %#v", h.cfg.RemoteManagement)
 	}
 	if !looksLikeBcryptPassword(h.cfg.RemoteManagement.Password) {

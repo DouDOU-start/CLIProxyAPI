@@ -300,8 +300,6 @@ type PprofConfig struct {
 
 // RemoteManagement holds management API configuration under 'remote-management'.
 type RemoteManagement struct {
-	// AllowRemote toggles remote (non-localhost) access to management API.
-	AllowRemote bool `yaml:"allow-remote"`
 	// Email is the account identifier used to sign in to the integrated web console.
 	Email string `yaml:"email"`
 	// Password contains the plaintext password or a legacy bcrypt hash.

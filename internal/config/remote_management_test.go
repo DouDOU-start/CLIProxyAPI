@@ -10,7 +10,7 @@ import (
 func TestLoadConfigPreservesRemoteManagementPassword(t *testing.T) {
 	const password = "secret-123"
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	payload := "remote-management:\n  allow-remote: false\n  email: admin@example.com\n  password: " + password + "\n"
+	payload := "remote-management:\n  email: admin@example.com\n  password: " + password + "\n"
 	if errWrite := os.WriteFile(configPath, []byte(payload), 0o600); errWrite != nil {
 		t.Fatalf("write config: %v", errWrite)
 	}

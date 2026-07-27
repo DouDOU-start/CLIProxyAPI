@@ -18,14 +18,12 @@ export interface ManagementSession {
 
 export interface ManagementSetupStatus {
   required: boolean;
-  remote_client: boolean;
 }
 
 export interface ManagementSetupRequest {
   email: string;
   password: string;
   confirm_password: string;
-  allow_remote: boolean;
 }
 
 class ApiClient {

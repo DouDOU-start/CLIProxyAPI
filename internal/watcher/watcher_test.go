@@ -179,14 +179,11 @@ func TestReloadConfigIfChanged_TriggersOnChangeAndSkipsUnchanged(t *testing.T) {
 	}
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	writeConfig := func(port int, allowRemote bool) {
+	writeConfig := func(port int) {
 		cfg := &config.Config{
 			Port:               port,
 			AuthDir:            authDir,
 			CredentialInFlight: config.DefaultCredentialInFlightConfig(),
-			RemoteManagement: config.RemoteManagement{
-				AllowRemote: allowRemote,
-			},
 		}
 		data, err := yaml.Marshal(cfg)
 		if err != nil {
@@ -197,7 +194,7 @@ func TestReloadConfigIfChanged_TriggersOnChangeAndSkipsUnchanged(t *testing.T) {
 		}
 	}
 
-	writeConfig(8080, false)
+	writeConfig(8080)
 
 	reloads := 0
 	w := &Watcher{
@@ -217,14 +214,14 @@ func TestReloadConfigIfChanged_TriggersOnChangeAndSkipsUnchanged(t *testing.T) {
 		t.Fatalf("expected unchanged config to be skipped, callback count %d", reloads)
 	}
 
-	writeConfig(9090, true)
+	writeConfig(9090)
 	w.reloadConfigIfChanged()
 	if reloads != 2 {
 		t.Fatalf("expected changed config to trigger reload, callback count %d", reloads)
 	}
 	w.clientsMutex.RLock()
 	defer w.clientsMutex.RUnlock()
-	if w.config == nil || w.config.Port != 9090 || !w.config.RemoteManagement.AllowRemote {
+	if w.config == nil || w.config.Port != 9090 {
 		t.Fatalf("expected config to be updated after reload, got %+v", w.config)
 	}
 }
