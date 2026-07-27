@@ -8,6 +8,8 @@
     "leave": "離開",
     "stay": "繼續編輯",
     "save": "儲存",
+    "save_confirm_title": "儲存設定",
+    "save_confirm_message": "確定將目前的設定變更儲存到 PostgreSQL 嗎？",
     "delete": "刪除",
     "edit": "編輯",
     "add": "新增",
@@ -869,14 +871,7 @@
     "validation_blocked_short": "待修復",
     "visual_mode_unavailable_detail": "已儲存的設定資料無效，暫時無法顯示：{{message}}",
     "visual_mode_save_blocked": "設定資料無效，暫時無法儲存",
-    "visual_mode_latest_yaml_invalid": "伺服器最新設定資料無效，暫時無法儲存：{{message}}",
-    "diff": {
-      "title": "確認變更",
-      "confirm": "確認儲存",
-      "no_changes": "未偵測到變更"
-    },
     "visual": {
-      "notice": "設定透過視覺化表單管理，儲存後持久化到 PostgreSQL。",
       "quick_jump": "快速跳轉",
       "mode": {
         "simple": "簡單",
@@ -887,7 +882,7 @@
         "switch_to_full": "切換完整模式"
       },
       "search": {
-        "placeholder": "搜尋設定項（標籤或 YAML 鍵名）",
+        "placeholder": "依名稱或設定鍵搜尋",
         "no_results": "沒有符合的設定項"
       },
       "sections": {
@@ -1060,7 +1055,7 @@
         "add_title": "新增 API 金鑰",
         "input_label": "API 金鑰",
         "input_placeholder": "貼上你的 API 金鑰",
-        "input_hint": "此處僅修改本地設定檔內容，不會自動同步到 API 金鑰管理介面",
+        "input_hint": "管理用於存取代理服務的 API 金鑰。",
         "error_empty": "請輸入 API 金鑰",
         "error_invalid": "API 金鑰包含無效字元"
       },

@@ -8,6 +8,8 @@
     "leave": "离开",
     "stay": "继续编辑",
     "save": "保存",
+    "save_confirm_title": "保存配置",
+    "save_confirm_message": "确定将当前配置变更保存到 PostgreSQL 吗？",
     "delete": "删除",
     "edit": "编辑",
     "add": "添加",
@@ -843,14 +845,7 @@
     "validation_blocked_short": "待修复",
     "visual_mode_unavailable_detail": "已保存的配置数据无效，暂时无法显示：{{message}}",
     "visual_mode_save_blocked": "配置数据无效，暂时无法保存",
-    "visual_mode_latest_yaml_invalid": "服务端最新配置数据无效，暂时无法保存：{{message}}",
-    "diff": {
-      "title": "确认变更",
-      "confirm": "确认保存",
-      "no_changes": "未检测到变更"
-    },
     "visual": {
-      "notice": "配置通过可视化表单管理，保存后持久化到 PostgreSQL。",
       "quick_jump": "快速跳转",
       "mode": {
         "simple": "简单",
@@ -861,7 +856,7 @@
         "switch_to_full": "切换完整模式"
       },
       "search": {
-        "placeholder": "搜索配置项（标签或 YAML 键名）",
+        "placeholder": "按名称或配置键搜索",
         "no_results": "没有匹配的配置项"
       },
       "sections": {
@@ -1034,7 +1029,7 @@
         "add_title": "添加 API 密钥",
         "input_label": "API 密钥",
         "input_placeholder": "粘贴你的 API 密钥",
-        "input_hint": "此处仅修改本地配置文件内容，不会自动同步到 API 密钥管理接口",
+        "input_hint": "管理用于访问代理服务的 API 密钥。",
         "error_empty": "请输入 API 密钥",
         "error_invalid": "API 密钥包含无效字符"
       },

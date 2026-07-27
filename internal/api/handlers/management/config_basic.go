@@ -13,11 +13,40 @@ import (
 )
 
 func (h *Handler) GetConfig(c *gin.Context) {
-	if h == nil || h.cfg == nil {
-		c.JSON(200, gin.H{})
+	if h == nil {
+		c.JSON(http.StatusOK, gin.H{})
 		return
 	}
-	c.JSON(200, new(*h.cfg))
+	writeMemoryConfig := func() {
+		if h.cfg == nil {
+			c.JSON(http.StatusOK, gin.H{})
+			return
+		}
+		c.JSON(http.StatusOK, new(*h.cfg))
+	}
+	if strings.TrimSpace(h.configFilePath) == "" {
+		writeMemoryConfig()
+		return
+	}
+	data, errRead := os.ReadFile(h.configFilePath)
+	if errRead != nil {
+		if os.IsNotExist(errRead) {
+			writeMemoryConfig()
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "read_failed", "message": errRead.Error()})
+		return
+	}
+	var payload any
+	if errUnmarshal := yaml.Unmarshal(data, &payload); errUnmarshal != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid_config", "message": errUnmarshal.Error()})
+		return
+	}
+	if payload == nil {
+		payload = gin.H{}
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, payload)
 }
 
 func WriteConfig(path string, data []byte) error {
@@ -37,18 +66,27 @@ func WriteConfig(path string, data []byte) error {
 	return f.Close()
 }
 
-func (h *Handler) PutConfigYAML(c *gin.Context) {
+func (h *Handler) PutConfig(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_yaml", "message": "cannot read request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_config", "message": "cannot read request body"})
 		return
 	}
-	var cfg config.Config
-	if err = yaml.Unmarshal(body, &cfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_yaml", "message": err.Error()})
+	var document yaml.Node
+	if err = yaml.Unmarshal(body, &document); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_config", "message": err.Error()})
 		return
 	}
-	// Validate config using LoadConfigOptional with optional=false to enforce parsing
+	if len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_config", "message": "configuration must be an object"})
+		return
+	}
+	encoded, errMarshal := yaml.Marshal(&document)
+	if errMarshal != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_config", "message": errMarshal.Error()})
+		return
+	}
+	// Validate the converted configuration before replacing the active document.
 	tmpDir := filepath.Dir(h.configFilePath)
 	tmpFile, err := os.CreateTemp(tmpDir, "config-validate-*.yaml")
 	if err != nil {
@@ -56,7 +94,7 @@ func (h *Handler) PutConfigYAML(c *gin.Context) {
 		return
 	}
 	tempFile := tmpFile.Name()
-	if _, errWrite := tmpFile.Write(body); errWrite != nil {
+	if _, errWrite := tmpFile.Write(encoded); errWrite != nil {
 		_ = tmpFile.Close()
 		_ = os.Remove(tempFile)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "write_failed", "message": errWrite.Error()})
@@ -77,7 +115,7 @@ func (h *Handler) PutConfigYAML(c *gin.Context) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if WriteConfig(h.configFilePath, body) != nil {
+	if WriteConfig(h.configFilePath, encoded) != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "write_failed", "message": "failed to write config"})
 		return
 	}
@@ -89,25 +127,6 @@ func (h *Handler) PutConfigYAML(c *gin.Context) {
 	}
 	h.cfg = newCfg
 	c.JSON(http.StatusOK, gin.H{"ok": true, "changed": []string{"config"}})
-}
-
-// GetConfigYAML returns the raw config.yaml file bytes without re-encoding.
-// It preserves comments and original formatting/styles.
-func (h *Handler) GetConfigYAML(c *gin.Context) {
-	data, err := os.ReadFile(h.configFilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not_found", "message": "config file not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "read_failed", "message": err.Error()})
-		return
-	}
-	c.Header("Content-Type", "application/yaml; charset=utf-8")
-	c.Header("Cache-Control", "no-store")
-	c.Header("X-Content-Type-Options", "nosniff")
-	// Write raw bytes as-is
-	_, _ = c.Writer.Write(data)
 }
 
 // Debug

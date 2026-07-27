@@ -8,6 +8,8 @@
     "leave": "Leave",
     "stay": "Stay",
     "save": "Save",
+    "save_confirm_title": "Save Configuration",
+    "save_confirm_message": "Save the current configuration changes to PostgreSQL?",
     "delete": "Delete",
     "edit": "Edit",
     "add": "Add",
@@ -843,14 +845,7 @@
     "validation_blocked_short": "Fix errors",
     "visual_mode_unavailable_detail": "The stored configuration data is invalid and cannot be displayed: {{message}}",
     "visual_mode_save_blocked": "Cannot save while the stored configuration data is invalid",
-    "visual_mode_latest_yaml_invalid": "The latest server configuration data is invalid and cannot be saved: {{message}}",
-    "diff": {
-      "title": "Review Changes",
-      "confirm": "Confirm Save",
-      "no_changes": "No changes detected"
-    },
     "visual": {
-      "notice": "Configuration is managed through visual forms and persisted to PostgreSQL.",
       "quick_jump": "Quick Jump",
       "mode": {
         "simple": "Simple",
@@ -861,7 +856,7 @@
         "switch_to_full": "Switch to full mode"
       },
       "search": {
-        "placeholder": "Search settings (label or YAML key)",
+        "placeholder": "Search settings by name or key",
         "no_results": "No matching settings"
       },
       "sections": {
@@ -1034,7 +1029,7 @@
         "add_title": "Add API Key",
         "input_label": "API Key",
         "input_placeholder": "Paste your API key",
-        "input_hint": "This only modifies the local config file content, it will not sync to the API Key Management interface",
+        "input_hint": "Manage the API keys used to access the proxy service.",
         "error_empty": "Please enter an API key",
         "error_invalid": "API key contains invalid characters"
       },

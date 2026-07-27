@@ -1,36 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
-import { parse as parseYaml, parseDocument } from 'yaml';
+import { parse as parseConfigData, stringify as serializeConfigData } from 'yaml';
 import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer';
 import { IconCheck, IconRefreshCw } from '@/components/ui/icons';
 import { VisualConfigEditor } from '@/components/config/VisualConfigEditor';
-import { DiffModal } from '@/components/config/DiffModal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useActionBarHeightVar } from '@/hooks/useActionBarHeightVar';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { useVisualConfig } from '@/hooks/useVisualConfig';
 import { useNotificationStore, useAuthStore, useConfigStore } from '@/stores';
-import { configFileApi } from '@/services/api/configFile';
+import { configApi } from '@/services/api/config';
 import styles from './ConfigPage.module.scss';
 
-function readCommercialModeFromYaml(yamlContent: string): boolean {
-  try {
-    const parsed = parseYaml(yamlContent);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-    return Boolean((parsed as Record<string, unknown>)['commercial-mode']);
-  } catch {
-    return false;
-  }
+function readCommercialMode(configData: Record<string, unknown>): boolean {
+  return Boolean(configData['commercial-mode']);
 }
 
-function normalizeYamlForVisualDiff(yamlContent: string): string {
-  try {
-    const doc = parseDocument(yamlContent);
-    return doc.toString({ indent: 2, lineWidth: 120, minContentWidth: 0 });
-  } catch {
-    return yamlContent;
+function serializeConfig(configData: Record<string, unknown>): string {
+  return serializeConfigData(configData, { indent: 2, lineWidth: 120, minContentWidth: 0 });
+}
+
+function parseConfig(content: string): Record<string, unknown> {
+  const parsed: unknown = parseConfigData(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Configuration must be an object');
   }
+  return parsed as Record<string, unknown>;
 }
 
 export function ConfigPage() {
@@ -56,10 +52,6 @@ export function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [diffModalOpen, setDiffModalOpen] = useState(false);
-  const [serverYaml, setServerYaml] = useState('');
-  const [mergedYaml, setMergedYaml] = useState('');
-  const [previewServerYaml, setPreviewServerYaml] = useState('');
   const floatingActionsRef = useRef<HTMLDivElement>(null);
 
   const disableControls = connectionStatus !== 'connected';
@@ -88,12 +80,8 @@ export function ConfigPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await configFileApi.fetchConfigYaml();
-      setDiffModalOpen(false);
-      setServerYaml(data);
-      setMergedYaml(data);
-      setPreviewServerYaml(data);
-      loadVisualValuesFromYaml(data);
+      const data = await configApi.getConfigData();
+      loadVisualValuesFromYaml(serializeConfig(data));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('notification.refresh_failed');
       setError(message);
@@ -106,39 +94,20 @@ export function ConfigPage() {
     loadConfig();
   }, [loadConfig]);
 
-  const handleConfirmSave = async () => {
+  const persistConfig = async () => {
     setSaving(true);
     try {
-      const latestServerYaml = await configFileApi.fetchConfigYaml();
-      if (latestServerYaml !== previewServerYaml) {
-        const nextMergedYaml = applyVisualChangesToYaml(latestServerYaml);
-        const nextServerYaml = normalizeYamlForVisualDiff(latestServerYaml);
-
-        setPreviewServerYaml(latestServerYaml);
-        setServerYaml(nextServerYaml);
-        setMergedYaml(nextMergedYaml);
-
-        if (nextServerYaml === nextMergedYaml) {
-          setDiffModalOpen(false);
-          loadVisualValuesFromYaml(latestServerYaml);
-          showNotification(t('config_management.diff.no_changes'), 'info');
-        }
-        return;
-      }
-
-      const previousCommercialMode = readCommercialModeFromYaml(latestServerYaml);
-      const nextCommercialMode = readCommercialModeFromYaml(mergedYaml);
+      const latestConfig = await configApi.getConfigData();
+      const nextConfig = parseConfig(applyVisualChangesToYaml(serializeConfig(latestConfig)));
+      const previousCommercialMode = readCommercialMode(latestConfig);
+      const nextCommercialMode = readCommercialMode(nextConfig);
       const commercialModeChanged = previousCommercialMode !== nextCommercialMode;
 
-      await configFileApi.saveConfigYaml(mergedYaml);
-      const latestContent = await configFileApi.fetchConfigYaml();
-      setDiffModalOpen(false);
-      setServerYaml(latestContent);
-      setMergedYaml(latestContent);
-      setPreviewServerYaml(latestContent);
-      loadVisualValuesFromYaml(latestContent);
+      await configApi.saveConfigData(nextConfig);
+      const latestContent = await configApi.getConfigData();
+      loadVisualValuesFromYaml(serializeConfig(latestContent));
 
-      // Keep the global config store in sync so sidebar / other pages reflect YAML changes immediately.
+      // Keep the global config store in sync so sidebar and other pages update immediately.
       try {
         useConfigStore.getState().clearCache();
         await useConfigStore.getState().fetchConfig(true);
@@ -167,53 +136,18 @@ export function ConfigPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (visualParseError) {
       showNotification(t('config_management.visual_mode_save_blocked'), 'error');
       return;
     }
-
-    setSaving(true);
-    try {
-      const latestServerYaml = await configFileApi.fetchConfigYaml();
-
-      const latestDocument = parseDocument(latestServerYaml);
-      if (latestDocument.errors.length > 0) {
-        showNotification(
-          t('config_management.visual_mode_latest_yaml_invalid', {
-            message:
-              latestDocument.errors[0]?.message ?? t('config_management.visual_mode_save_blocked'),
-          }),
-          'error'
-        );
-        return;
-      }
-
-      const nextMergedYaml = applyVisualChangesToYaml(latestServerYaml);
-
-      // Visual updates re-serialize YAML. Normalize the server snapshot through the same
-      // pipeline so the review shows value changes instead of cosmetic formatting changes.
-      const diffOriginal = normalizeYamlForVisualDiff(latestServerYaml);
-
-      if (diffOriginal === nextMergedYaml) {
-        setServerYaml(latestServerYaml);
-        setMergedYaml(nextMergedYaml);
-        setPreviewServerYaml(latestServerYaml);
-        loadVisualValuesFromYaml(latestServerYaml);
-        showNotification(t('config_management.diff.no_changes'), 'info');
-        return;
-      }
-
-      setServerYaml(diffOriginal);
-      setMergedYaml(nextMergedYaml);
-      setPreviewServerYaml(latestServerYaml);
-      setDiffModalOpen(true);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : '';
-      showNotification(`${t('notification.save_failed')}: ${message}`, 'error');
-    } finally {
-      setSaving(false);
-    }
+    showConfirmation({
+      title: t('config_management.save_confirm_title'),
+      message: t('config_management.save_confirm_message'),
+      confirmText: t('config_management.save'),
+      cancelText: t('common.cancel'),
+      onConfirm: persistConfig,
+    });
   };
 
   // Keep bottom floating actions from covering page content by syncing its height to a CSS variable.
@@ -250,7 +184,7 @@ export function ConfigPage() {
     if (loading) return t('config_management.status_loading_short', { defaultValue: 'Loading' });
     if (error) return t('config_management.status_load_failed_short', { defaultValue: 'Failed' });
     if (hasVisualModeError)
-      return t('config_management.visual_mode_unavailable_short', { defaultValue: 'YAML issue' });
+      return t('config_management.visual_mode_unavailable_short', { defaultValue: 'Config issue' });
     if (hasVisualValidationErrors)
       return t('config_management.visual.validation_blocked_short', { defaultValue: 'Fix errors' });
     if (saving) return t('config_management.status_saving_short', { defaultValue: 'Saving' });
@@ -305,7 +239,6 @@ export function ConfigPage() {
             loading ||
             saving ||
             !isDirty ||
-            diffModalOpen ||
             hasVisualModeError ||
             hasVisualValidationErrors
           }
@@ -347,14 +280,6 @@ export function ConfigPage() {
       {shouldRenderFloatingActions && typeof document !== 'undefined'
         ? createPortal(floatingActions, document.body)
         : null}
-      <DiffModal
-        open={diffModalOpen}
-        original={serverYaml}
-        modified={mergedYaml}
-        onConfirm={handleConfirmSave}
-        onCancel={() => setDiffModalOpen(false)}
-        loading={saving}
-      />
     </div>
   );
 }

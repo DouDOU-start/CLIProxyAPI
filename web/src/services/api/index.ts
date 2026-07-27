@@ -3,7 +3,6 @@ export * from './apiCall';
 export * from './antigravitySubscription';
 export * from './apiKeyUsage';
 export * from './config';
-export * from './configFile';
 export * from './apiKeys';
 export * from './authFiles';
 export * from './oauth';
