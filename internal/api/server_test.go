@@ -1148,6 +1148,14 @@ func TestManagementUsageCostsRequiresManagementAuth(t *testing.T) {
 	if summary.Enabled || summary.Accounts == nil || summary.Models == nil {
 		t.Fatalf("unexpected empty usage cost summary: %#v", summary)
 	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v0/management/usage-costs", nil)
+	addManagementSession(deleteReq, cookie, csrfToken)
+	deleteRecorder := httptest.NewRecorder()
+	server.engine.ServeHTTP(deleteRecorder, deleteReq)
+	if deleteRecorder.Code != http.StatusNotFound {
+		t.Fatalf("delete usage costs status = %d, want %d body=%s", deleteRecorder.Code, http.StatusNotFound, deleteRecorder.Body.String())
+	}
 }
 
 func TestManagementPluginsRouteRegistered(t *testing.T) {

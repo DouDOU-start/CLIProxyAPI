@@ -103,6 +103,11 @@ func NewStore(path string, enabled bool) (*Store, error) {
 	if errLoad := store.load(); errLoad != nil {
 		return nil, errLoad
 	}
+	if store.insertMissingBuiltinPrices(time.Now().UnixMilli()) {
+		if errSave := store.saveSnapshot(); errSave != nil {
+			log.WithError(errSave).Warn("usage statistics: failed to persist built-in model prices")
+		}
+	}
 	go store.run()
 	return store, nil
 }
@@ -372,24 +377,6 @@ func (s *Store) ListPrices() []ModelPrice {
 		return strings.ToLower(prices[left].Model) < strings.ToLower(prices[right].Model)
 	})
 	return prices
-}
-
-// ClearUsage deletes collected aggregates while preserving the price book.
-func (s *Store) ClearUsage() error {
-	if s == nil {
-		return errors.New("usage statistics store unavailable")
-	}
-	s.mu.Lock()
-	previous := s.state.Aggregates
-	s.state.Aggregates = make(map[string]Aggregate)
-	s.mu.Unlock()
-	if errSave := s.saveSnapshot(); errSave != nil {
-		s.mu.Lock()
-		s.state.Aggregates = previous
-		s.mu.Unlock()
-		return errSave
-	}
-	return nil
 }
 
 // Summary computes current-price account and model cost estimates.

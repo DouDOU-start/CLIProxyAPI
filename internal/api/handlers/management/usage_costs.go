@@ -54,20 +54,6 @@ func (h *Handler) GetUsageCosts(c *gin.Context) {
 	c.JSON(http.StatusOK, store.Summary())
 }
 
-// DeleteUsageCosts clears collected usage aggregates while preserving prices.
-func (h *Handler) DeleteUsageCosts(c *gin.Context) {
-	store := h.usageStore()
-	if store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "usage_statistics_unavailable", "message": "usage statistics store unavailable"})
-		return
-	}
-	if errClear := store.ClearUsage(); errClear != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "usage_statistics_clear_failed", "message": errClear.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
 // GetModelPrices returns the local model price book and observed model names.
 func (h *Handler) GetModelPrices(c *gin.Context) {
 	store := h.usageStore()

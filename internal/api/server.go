@@ -969,7 +969,6 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/api-key-usage", s.mgmt.GetAPIKeyUsage)
 		mgmt.GET("/usage-queue", s.mgmt.GetUsageQueue)
 		mgmt.GET("/usage-costs", s.mgmt.GetUsageCosts)
-		mgmt.DELETE("/usage-costs", s.mgmt.DeleteUsageCosts)
 		mgmt.GET("/model-prices", s.mgmt.GetModelPrices)
 		mgmt.PUT("/model-prices", s.mgmt.PutModelPrice)
 		mgmt.DELETE("/model-prices", s.mgmt.DeleteModelPrice)

@@ -10,6 +10,99 @@ import (
 	coreusage "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/usage"
 )
 
+func TestStoreSeedsBuiltinCodexPrices(t *testing.T) {
+	store, errStore := NewStore(filepath.Join(t.TempDir(), storageFileName), true)
+	if errStore != nil {
+		t.Fatalf("NewStore() error = %v", errStore)
+	}
+	defer store.Close()
+
+	prices := make(map[string]ModelPrice)
+	for _, price := range store.ListPrices() {
+		prices[price.Model] = price
+	}
+	expected := map[string]ModelPrice{
+		"gpt-5.3-codex-spark": {InputMicrosPerMillion: 1_750_000, OutputMicrosPerMillion: 14_000_000, CacheReadMicrosPerMillion: 175_000},
+		"gpt-5.4":             {InputMicrosPerMillion: 2_500_000, OutputMicrosPerMillion: 15_000_000, CacheReadMicrosPerMillion: 250_000},
+		"gpt-5.4-mini":        {InputMicrosPerMillion: 750_000, OutputMicrosPerMillion: 4_500_000, CacheReadMicrosPerMillion: 75_000},
+		"gpt-5.5":             {InputMicrosPerMillion: 5_000_000, OutputMicrosPerMillion: 30_000_000, CacheReadMicrosPerMillion: 500_000},
+		"codex-auto-review":   {InputMicrosPerMillion: 5_000_000, OutputMicrosPerMillion: 30_000_000, CacheReadMicrosPerMillion: 500_000},
+		"gpt-5.6-sol":         {InputMicrosPerMillion: 5_000_000, OutputMicrosPerMillion: 30_000_000, CacheReadMicrosPerMillion: 500_000, CacheWriteMicrosPerMillion: 6_250_000},
+		"gpt-5.6-terra":       {InputMicrosPerMillion: 2_500_000, OutputMicrosPerMillion: 15_000_000, CacheReadMicrosPerMillion: 250_000, CacheWriteMicrosPerMillion: 3_125_000},
+		"gpt-5.6-luna":        {InputMicrosPerMillion: 1_000_000, OutputMicrosPerMillion: 6_000_000, CacheReadMicrosPerMillion: 100_000, CacheWriteMicrosPerMillion: 1_250_000},
+	}
+	for model, want := range expected {
+		got, exists := prices[model]
+		if !exists {
+			t.Fatalf("built-in price %q was not seeded", model)
+		}
+		if got.InputMicrosPerMillion != want.InputMicrosPerMillion ||
+			got.OutputMicrosPerMillion != want.OutputMicrosPerMillion ||
+			got.CacheReadMicrosPerMillion != want.CacheReadMicrosPerMillion ||
+			got.CacheWriteMicrosPerMillion != want.CacheWriteMicrosPerMillion {
+			t.Fatalf("price for %q = %#v, want %#v", model, got, want)
+		}
+		if got.Source != builtinPriceSource || !got.CacheReadConfigured || !got.CacheWriteConfigured || got.UpdatedAtMS == 0 {
+			t.Fatalf("built-in metadata for %q = %#v", model, got)
+		}
+	}
+}
+
+func TestStoreDoesNotOverwriteManualBuiltinPrice(t *testing.T) {
+	path := filepath.Join(t.TempDir(), storageFileName)
+	store, errStore := NewStore(path, true)
+	if errStore != nil {
+		t.Fatalf("NewStore() error = %v", errStore)
+	}
+	if errPrice := store.UpsertPrice(ModelPrice{
+		Model:                  "gpt-5.6-sol",
+		InputMicrosPerMillion:  123_000,
+		OutputMicrosPerMillion: 456_000,
+	}); errPrice != nil {
+		t.Fatalf("UpsertPrice() error = %v", errPrice)
+	}
+	store.Close()
+
+	reopened, errReopen := NewStore(path, false)
+	if errReopen != nil {
+		t.Fatalf("reopen store error = %v", errReopen)
+	}
+	defer reopened.Close()
+	for _, price := range reopened.ListPrices() {
+		if price.Model != "gpt-5.6-sol" {
+			continue
+		}
+		if price.InputMicrosPerMillion != 123_000 || price.OutputMicrosPerMillion != 456_000 || price.Source != "manual" {
+			t.Fatalf("manual price was overwritten: %#v", price)
+		}
+		return
+	}
+	t.Fatal("manual gpt-5.6-sol price was not found")
+}
+
+func TestStoreUsesBuiltinPriceForUsageCost(t *testing.T) {
+	store, errStore := NewStore(filepath.Join(t.TempDir(), storageFileName), true)
+	if errStore != nil {
+		t.Fatalf("NewStore() error = %v", errStore)
+	}
+	defer store.Close()
+	store.HandleUsage(context.Background(), coreusage.Record{
+		Provider:  "openai",
+		Model:     "gpt-5.4-mini",
+		AuthIndex: "auth-index-1",
+		Detail: coreusage.Detail{
+			InputTokens:  1_000_000,
+			OutputTokens: 1_000_000,
+			TotalTokens:  2_000_000,
+		},
+	})
+
+	summary := store.Summary()
+	if summary.CostMicros != 5_250_000 || summary.UnpricedCalls != 0 {
+		t.Fatalf("summary with built-in price = %#v", summary)
+	}
+}
+
 func TestStorePersistsAccountUsageWithoutRawAPIKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), storageFileName)
 	store, errStore := NewStore(path, true)

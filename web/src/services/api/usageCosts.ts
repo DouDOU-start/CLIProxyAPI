@@ -8,7 +8,6 @@ import { apiClient } from './client';
 
 export const usageCostsApi = {
   getSummary: () => apiClient.get<UsageCostSummary>('/usage-costs'),
-  clearSummary: () => apiClient.delete<{ ok: boolean }>('/usage-costs'),
   getPrices: () => apiClient.get<ModelPricesResponse>('/model-prices'),
   savePrice: (price: ModelPriceInput) => apiClient.put<ModelPrice>('/model-prices', price),
   deletePrice: (model: string) =>

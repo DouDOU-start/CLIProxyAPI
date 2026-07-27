@@ -194,20 +194,6 @@ export function UsageCostsPage() {
     });
   };
 
-  const confirmClearUsage = () => {
-    showConfirmation({
-      title: t('usage_costs.clear_title'),
-      message: t('usage_costs.clear_confirm'),
-      confirmText: t('usage_costs.clear_action'),
-      variant: 'danger',
-      onConfirm: async () => {
-        await usageCostsApi.clearSummary();
-        showNotification(t('usage_costs.cleared'), 'success');
-        await load();
-      },
-    });
-  };
-
   const enableCollection = async () => {
     setEnabling(true);
     try {
@@ -316,20 +302,10 @@ export function UsageCostsPage() {
               aria-label={t('usage_costs.search')}
             />
           </div>
-          {view === 'prices' ? (
+          {view === 'prices' && (
             <Button size="sm" onClick={() => openNewPrice()}>
               <IconPlus size={15} />
               {t('usage_costs.add_price')}
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={confirmClearUsage}
-              disabled={!summary?.calls}
-            >
-              <IconTrash2 size={15} />
-              {t('usage_costs.clear_action')}
             </Button>
           )}
         </div>
@@ -441,7 +417,11 @@ export function UsageCostsPage() {
                           : t('usage_costs.auto_price')}
                       </td>
                       <td>
-                        {price.source === 'manual' ? t('usage_costs.source_manual') : price.source}
+                        {price.source === 'manual'
+                          ? t('usage_costs.source_manual')
+                          : price.source === 'builtin'
+                            ? t('usage_costs.source_builtin')
+                            : price.source}
                       </td>
                       <td>
                         <div className={styles.rowActions}>

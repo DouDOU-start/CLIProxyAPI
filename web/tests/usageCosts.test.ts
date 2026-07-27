@@ -40,7 +40,6 @@ describe('usage costs API', () => {
         cache_write_per_million_usd: null,
       });
       await usageCostsApi.deletePrice('gpt-test');
-      await usageCostsApi.clearSummary();
 
       expect(calls).toEqual([
         { method: 'GET', url: '/usage-costs' },
@@ -57,7 +56,6 @@ describe('usage costs API', () => {
           },
         },
         { method: 'DELETE', url: '/model-prices', value: { params: { model: 'gpt-test' } } },
-        { method: 'DELETE', url: '/usage-costs', value: undefined },
       ]);
     } finally {
       client.get = originalGet;

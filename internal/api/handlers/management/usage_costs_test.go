@@ -24,7 +24,6 @@ func newUsageCostsTestRouter(t *testing.T) (*gin.Engine, *usagestats.Store) {
 	handler := &Handler{usageStatsStore: store}
 	router := gin.New()
 	router.GET("/usage-costs", handler.GetUsageCosts)
-	router.DELETE("/usage-costs", handler.DeleteUsageCosts)
 	router.GET("/model-prices", handler.GetModelPrices)
 	router.PUT("/model-prices", handler.PutModelPrice)
 	router.DELETE("/model-prices", handler.DeleteModelPrice)
@@ -79,17 +78,6 @@ func TestUsageCostsManagementFlow(t *testing.T) {
 		t.Fatalf("unexpected usage summary: %#v", summary)
 	}
 
-	clearRecorder := httptest.NewRecorder()
-	router.ServeHTTP(clearRecorder, httptest.NewRequest(http.MethodDelete, "/usage-costs", nil))
-	if clearRecorder.Code != http.StatusOK {
-		t.Fatalf("clear usage status = %d, want %d body=%s", clearRecorder.Code, http.StatusOK, clearRecorder.Body.String())
-	}
-	if store.Summary().Calls != 0 {
-		t.Fatalf("usage calls after clear = %d, want 0", store.Summary().Calls)
-	}
-	if len(store.ListPrices()) != 1 {
-		t.Fatalf("prices after clear = %d, want 1", len(store.ListPrices()))
-	}
 }
 
 func TestPutModelPriceRejectsNegativePrice(t *testing.T) {
