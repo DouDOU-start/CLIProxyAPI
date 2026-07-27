@@ -108,44 +108,6 @@ func newStore(ctx context.Context, storage snapshotStorage, enabled bool) (*Stor
 	return store, nil
 }
 
-// ImportSnapshotIfEmpty imports a legacy snapshot only when PostgreSQL has no collected usage
-// or manually configured model prices. Built-in prices alone do not block the migration.
-func (s *Store) ImportSnapshotIfEmpty(data []byte) (bool, error) {
-	if s == nil || len(data) == 0 {
-		return false, nil
-	}
-	state, errDecode := decodePersistentState(data)
-	if errDecode != nil {
-		return false, errDecode
-	}
-
-	s.mu.Lock()
-	if len(s.state.Aggregates) > 0 || hasNonBuiltinPrices(s.state.Prices) {
-		s.mu.Unlock()
-		return false, nil
-	}
-	previous := s.state
-	s.state = state
-	s.mu.Unlock()
-	s.insertMissingBuiltinPrices(time.Now().UnixMilli())
-	if errSave := s.saveSnapshot(); errSave != nil {
-		s.mu.Lock()
-		s.state = previous
-		s.mu.Unlock()
-		return false, errSave
-	}
-	return true, nil
-}
-
-func hasNonBuiltinPrices(prices map[string]ModelPrice) bool {
-	for _, price := range prices {
-		if price.Source != builtinPriceSource {
-			return true
-		}
-	}
-	return false
-}
-
 func newPersistentState() persistentState {
 	return persistentState{
 		Version:    storageVersion,

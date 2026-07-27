@@ -128,20 +128,17 @@ CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
 The web management console is built into the Go binary and opens at `http://localhost:8317/`.
 
-PostgreSQL is required. Configuration, authentication accounts, model prices, and cumulative usage statistics are persisted there. The server only creates a temporary runtime mirror for file-watcher compatibility and removes it on exit. Local file, Git, object-storage, and Home control-plane persistence modes are disabled.
+PostgreSQL is required. The local `config.yaml` contains only the database connection. Server settings, authentication accounts, model prices, and cumulative usage statistics are persisted in PostgreSQL and managed through the management console. The server creates a temporary runtime mirror for file-watcher compatibility and removes it on exit.
 
 ```bash
-PGSTORE_DSN=postgresql://user:pass@localhost:5432/cliproxy \
-MANAGEMENT_EMAIL=admin@example.com \
-MANAGEMENT_PASSWORD=change-me-to-a-strong-password \
+cp config.example.yaml config.yaml
+# Edit postgresql.dsn in config.yaml, then start the service:
 make dev
 ```
 
-`PGSTORE_SCHEMA` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically.
+`postgresql.schema` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically and inserts a minimal system configuration into `config_store`.
 
-When `usage_statistics` has no collected data or manual prices, the server imports an existing legacy `usage-statistics.json` from the previous local storage locations once. The legacy file is left untouched and is never written again.
-
-The password must contain at least 8 characters. You can also set `remote-management.email` and `remote-management.password` directly in `config.yaml`; the password remains plaintext. Existing bcrypt values remain supported for compatibility.
+The password must contain at least 8 characters. After the first startup, configure server settings through the management console; they are written to PostgreSQL rather than the local bootstrap YAML.
 
 For frontend hot reload, run `make dev-backend` and `make web-dev` in separate terminals, then open `http://localhost:5173/`.
 

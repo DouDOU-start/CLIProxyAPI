@@ -1,44 +1,83 @@
 package main
 
 import (
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 )
 
-func TestRequiredPostgresConfig(t *testing.T) {
+func TestLoadRequiredPostgresConfig(t *testing.T) {
 	tests := []struct {
 		name       string
-		values     map[string]string
+		file       string
 		wantDSN    string
 		wantSchema string
 		wantErr    bool
 	}{
-		{name: "missing DSN", values: map[string]string{}, wantErr: true},
-		{name: "uppercase variables", values: map[string]string{"PGSTORE_DSN": "postgres://db", "PGSTORE_SCHEMA": "cliproxy"}, wantDSN: "postgres://db", wantSchema: "cliproxy"},
-		{name: "lowercase compatibility", values: map[string]string{"pgstore_dsn": "postgres://lower", "pgstore_schema": "public"}, wantDSN: "postgres://lower", wantSchema: "public"},
+		{name: "YAML configuration", file: "postgresql:\n  dsn: postgres://yaml\n  schema: app\n", wantDSN: "postgres://yaml", wantSchema: "app"},
+		{name: "missing file", wantErr: true},
+		{name: "missing DSN", file: "postgresql:\n  schema: public\n", wantErr: true},
+		{name: "invalid YAML", file: "postgresql: [", wantErr: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			lookup := func(keys ...string) (string, bool) {
-				for _, key := range keys {
-					value := strings.TrimSpace(test.values[key])
-					if value != "" {
-						return value, true
-					}
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			if test.file != "" {
+				if errWrite := os.WriteFile(path, []byte(test.file), 0o600); errWrite != nil {
+					t.Fatalf("write bootstrap config: %v", errWrite)
 				}
-				return "", false
 			}
-			gotDSN, gotSchema, errConfig := requiredPostgresConfig(lookup)
+			gotDSN, gotSchema, errConfig := loadRequiredPostgresConfig(path)
 			if (errConfig != nil) != test.wantErr {
-				t.Fatalf("requiredPostgresConfig() error = %v, wantErr %t", errConfig, test.wantErr)
+				t.Fatalf("loadRequiredPostgresConfig() error = %v, wantErr %t", errConfig, test.wantErr)
 			}
 			if gotDSN != test.wantDSN || gotSchema != test.wantSchema {
-				t.Fatalf("requiredPostgresConfig() = (%q, %q), want (%q, %q)", gotDSN, gotSchema, test.wantDSN, test.wantSchema)
+				t.Fatalf("loadRequiredPostgresConfig() = (%q, %q), want (%q, %q)", gotDSN, gotSchema, test.wantDSN, test.wantSchema)
 			}
 		})
+	}
+}
+
+func TestDatabaseBootstrapConfigPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		fallback string
+		want     string
+		wantErr  bool
+	}{
+		{name: "default", fallback: "config.yaml", want: "config.yaml"},
+		{name: "short flag", args: []string{"-config", "custom.yaml"}, want: "custom.yaml"},
+		{name: "long flag", args: []string{"--config", "custom.yaml"}, want: "custom.yaml"},
+		{name: "short assignment", args: []string{"-config=custom.yaml"}, want: "custom.yaml"},
+		{name: "long assignment", args: []string{"--config=custom.yaml"}, want: "custom.yaml"},
+		{name: "after separator ignored", args: []string{"--", "--config", "custom.yaml"}, fallback: "config.yaml", want: "config.yaml"},
+		{name: "missing value", args: []string{"--config"}, wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, errPath := databaseBootstrapConfigPath(test.args, test.fallback)
+			if (errPath != nil) != test.wantErr {
+				t.Fatalf("databaseBootstrapConfigPath() error = %v, wantErr %t", errPath, test.wantErr)
+			}
+			if got != test.want {
+				t.Fatalf("databaseBootstrapConfigPath() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestResolveDatabaseBootstrapConfigPath(t *testing.T) {
+	workingDirectory := filepath.Join(string(filepath.Separator), "workspace")
+	if got := resolveDatabaseBootstrapConfigPath("", workingDirectory); got != filepath.Join(workingDirectory, "config.yaml") {
+		t.Fatalf("empty path resolved to %q", got)
+	}
+	if got := resolveDatabaseBootstrapConfigPath("custom.yaml", workingDirectory); got != filepath.Join(workingDirectory, "custom.yaml") {
+		t.Fatalf("relative path resolved to %q", got)
 	}
 }
 

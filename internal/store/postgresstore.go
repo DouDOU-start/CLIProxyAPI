@@ -14,15 +14,21 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	defaultConfigTable = "config_store"
-	defaultAuthTable   = "auth_store"
-	defaultConfigKey   = "config"
+	defaultConfigTable  = "config_store"
+	defaultAuthTable    = "auth_store"
+	defaultConfigKey    = "config"
+	defaultSystemConfig = `host: ""
+port: 8317
+auth-dir: ""
+api-keys: []
+usage-statistics-enabled: false
+`
 )
 
 // PostgresStoreConfig captures configuration required to initialize a Postgres-backed store.
@@ -176,11 +182,11 @@ func (s *PostgresStore) EnsureSchema(ctx context.Context) error {
 }
 
 // Bootstrap synchronizes configuration and auth records between PostgreSQL and the local workspace.
-func (s *PostgresStore) Bootstrap(ctx context.Context, exampleConfigPath string) error {
+func (s *PostgresStore) Bootstrap(ctx context.Context) error {
 	if err := s.EnsureSchema(ctx); err != nil {
 		return err
 	}
-	if err := s.syncConfigFromDatabase(ctx, exampleConfigPath); err != nil {
+	if err := s.syncConfigFromDatabase(ctx); err != nil {
 		return err
 	}
 	if err := s.syncAuthFromDatabase(ctx); err != nil {
@@ -440,30 +446,19 @@ func (s *PostgresStore) PersistConfig(ctx context.Context) error {
 	return s.persistConfig(ctx, data)
 }
 
-// syncConfigFromDatabase writes the database-stored config to disk or seeds the database from template.
-func (s *PostgresStore) syncConfigFromDatabase(ctx context.Context, exampleConfigPath string) error {
+// syncConfigFromDatabase writes the database-stored config to disk or seeds a minimal system config.
+func (s *PostgresStore) syncConfigFromDatabase(ctx context.Context) error {
 	query := fmt.Sprintf("SELECT content FROM %s WHERE id = $1", s.fullTableName(s.cfg.ConfigTable))
 	var content string
 	err := s.db.QueryRowContext(ctx, query, defaultConfigKey).Scan(&content)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		if _, errStat := os.Stat(s.configPath); errors.Is(errStat, fs.ErrNotExist) {
-			if exampleConfigPath != "" {
-				if errCopy := misc.CopyConfigTemplate(exampleConfigPath, s.configPath); errCopy != nil {
-					return fmt.Errorf("postgres store: copy example config: %w", errCopy)
-				}
-			} else {
-				if errCreate := os.MkdirAll(filepath.Dir(s.configPath), 0o700); errCreate != nil {
-					return fmt.Errorf("postgres store: prepare config directory: %w", errCreate)
-				}
-				if errWrite := os.WriteFile(s.configPath, []byte{}, 0o600); errWrite != nil {
-					return fmt.Errorf("postgres store: create empty config: %w", errWrite)
-				}
-			}
+		if errCreate := os.MkdirAll(filepath.Dir(s.configPath), 0o700); errCreate != nil {
+			return fmt.Errorf("postgres store: prepare config directory: %w", errCreate)
 		}
-		data, errRead := os.ReadFile(s.configPath)
-		if errRead != nil {
-			return fmt.Errorf("postgres store: read local config: %w", errRead)
+		data := []byte(defaultSystemConfig)
+		if errWrite := os.WriteFile(s.configPath, data, 0o600); errWrite != nil {
+			return fmt.Errorf("postgres store: write initial config: %w", errWrite)
 		}
 		if errPersist := s.persistConfig(ctx, data); errPersist != nil {
 			return errPersist
@@ -578,11 +573,40 @@ func (s *PostgresStore) persistConfig(ctx context.Context, data []byte) error {
 		ON CONFLICT (id)
 		DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
 	`, s.fullTableName(s.cfg.ConfigTable))
-	normalized := normalizeLineEndings(string(data))
+	normalized, errNormalize := normalizePersistentConfig(data)
+	if errNormalize != nil {
+		return errNormalize
+	}
 	if _, err := s.db.ExecContext(ctx, query, defaultConfigKey, normalized); err != nil {
 		return fmt.Errorf("postgres store: upsert config: %w", err)
 	}
 	return nil
+}
+
+func normalizePersistentConfig(data []byte) (string, error) {
+	var document yaml.Node
+	if errUnmarshal := yaml.Unmarshal(data, &document); errUnmarshal != nil {
+		return "", fmt.Errorf("postgres store: normalize config: %w", errUnmarshal)
+	}
+	if len(document.Content) > 0 && document.Content[0].Kind == yaml.MappingNode {
+		mapping := document.Content[0]
+		for index := 0; index+1 < len(mapping.Content); index += 2 {
+			if mapping.Content[index].Value != "auth-dir" {
+				continue
+			}
+			value := mapping.Content[index+1]
+			value.Kind = yaml.ScalarNode
+			value.Tag = "!!str"
+			value.Value = ""
+			value.Content = nil
+			break
+		}
+	}
+	normalized, errMarshal := yaml.Marshal(&document)
+	if errMarshal != nil {
+		return "", fmt.Errorf("postgres store: encode normalized config: %w", errMarshal)
+	}
+	return normalizeLineEndings(string(normalized)), nil
 }
 
 func (s *PostgresStore) deleteConfigRecord(ctx context.Context) error {

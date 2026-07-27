@@ -29,7 +29,7 @@ help:
 		'make kimi-login           登录 Kimi OAuth' \
 		'make xai-login            登录 xAI OAuth' \
 		'' \
-		'可覆盖参数：CONFIG、BINARY、SERVER_PACKAGE、WEB_DIR、ARGS'
+		'可覆盖参数：CONFIG（数据库引导 YAML）、BINARY、SERVER_PACKAGE、WEB_DIR、ARGS'
 
 config:
 	@if [ ! -f "$(CONFIG)" ]; then \

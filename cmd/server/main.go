@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/joho/godotenv"
 	configaccess "github.com/router-for-me/CLIProxyAPI/v7/internal/access/config_access"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/api"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/buildinfo"
@@ -32,6 +31,7 @@ import (
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v7/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -56,16 +56,75 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, cloudCon
 	return safemode.HasExampleAPIKeys(cfg.APIKeys)
 }
 
-func requiredPostgresConfig(lookup func(...string) (string, bool)) (dsn, schema string, err error) {
-	if lookup == nil {
-		return "", "", fmt.Errorf("PGSTORE_DSN is required")
+type postgresBootstrapConfig struct {
+	PostgreSQL struct {
+		DSN    string `yaml:"dsn"`
+		Schema string `yaml:"schema"`
+	} `yaml:"postgresql"`
+}
+
+func loadRequiredPostgresConfig(path string) (dsn, schema string, err error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", "", fmt.Errorf("database bootstrap config path is required")
 	}
-	dsn, ok := lookup("PGSTORE_DSN", "pgstore_dsn")
-	if !ok {
-		return "", "", fmt.Errorf("PGSTORE_DSN is required; local, Git, and object storage backends are disabled")
+	data, errRead := os.ReadFile(path)
+	if errRead != nil {
+		if errors.Is(errRead, os.ErrNotExist) {
+			return "", "", fmt.Errorf("database bootstrap config %s is required", path)
+		}
+		return "", "", fmt.Errorf("read database bootstrap config %s: %w", path, errRead)
 	}
-	schema, _ = lookup("PGSTORE_SCHEMA", "pgstore_schema")
+	var bootstrap postgresBootstrapConfig
+	if errUnmarshal := yaml.Unmarshal(data, &bootstrap); errUnmarshal != nil {
+		return "", "", fmt.Errorf("parse database bootstrap config %s: %w", path, errUnmarshal)
+	}
+	dsn = strings.TrimSpace(bootstrap.PostgreSQL.DSN)
+	schema = strings.TrimSpace(bootstrap.PostgreSQL.Schema)
+	if dsn == "" {
+		return "", "", fmt.Errorf("postgresql.dsn is required in %s", path)
+	}
 	return dsn, schema, nil
+}
+
+func databaseBootstrapConfigPath(args []string, defaultPath string) (string, error) {
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		switch {
+		case arg == "--":
+			return defaultPath, nil
+		case arg == "-config" || arg == "--config":
+			if index+1 >= len(args) {
+				return "", fmt.Errorf("%s requires a path", arg)
+			}
+			return args[index+1], nil
+		case strings.HasPrefix(arg, "-config="):
+			return strings.TrimPrefix(arg, "-config="), nil
+		case strings.HasPrefix(arg, "--config="):
+			return strings.TrimPrefix(arg, "--config="), nil
+		}
+	}
+	return defaultPath, nil
+}
+
+func resolveDatabaseBootstrapConfigPath(path, workingDirectory string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return filepath.Join(workingDirectory, "config.yaml")
+	}
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(workingDirectory, path)
+}
+
+func commandLineRequestsHelp(args []string) bool {
+	for _, arg := range args {
+		if arg == "-h" || arg == "-help" || arg == "--help" {
+			return true
+		}
+	}
+	return false
 }
 
 // main is the entry point of the application.
@@ -99,7 +158,7 @@ func main() {
 	flag.BoolVar(&antigravityLogin, "antigravity-login", false, "Login to Antigravity using OAuth")
 	flag.BoolVar(&kimiLogin, "kimi-login", false, "Login to Kimi using OAuth")
 	flag.BoolVar(&xaiLogin, "xai-login", false, "Login to xAI using OAuth")
-	flag.StringVar(&configPath, "config", DefaultConfigPath, "Configure File Path")
+	flag.StringVar(&configPath, "config", DefaultConfigPath, "Database bootstrap YAML path")
 	flag.StringVar(&vertexImport, "vertex-import", "", "Import Vertex service account key JSON file")
 	flag.StringVar(&vertexImportPrefix, "vertex-import-prefix", "", "Prefix for Vertex model namespacing (use with -vertex-import)")
 	flag.StringVar(&homeJWT, "home-jwt", "", "Home control plane JWT for mTLS certificate bootstrap and connection")
@@ -130,15 +189,6 @@ func main() {
 		})
 	}
 
-	pluginHost := pluginhost.New()
-	if bootstrapCfg := loadPluginBootstrapConfig(pluginBootstrapConfigPath(os.Args[1:], DefaultConfigPath)); bootstrapCfg != nil {
-		pluginHost.ApplyConfig(context.Background(), bootstrapCfg)
-		pluginHost.RegisterCommandLineFlags(context.Background(), flag.CommandLine)
-	}
-
-	// Parse the command-line flags.
-	flag.Parse()
-
 	// Core application variables.
 	var err error
 	var cfg *config.Config
@@ -155,33 +205,20 @@ func main() {
 		return
 	}
 
-	// Load environment variables from .env if present.
-	if errLoad := godotenv.Load(filepath.Join(wd, ".env")); errLoad != nil {
-		if !errors.Is(errLoad, os.ErrNotExist) {
-			log.WithError(errLoad).Warn("failed to load .env file")
-		}
-	}
-
-	lookupEnv := func(keys ...string) (string, bool) {
-		for _, key := range keys {
-			if value, ok := os.LookupEnv(key); ok {
-				if trimmed := strings.TrimSpace(value); trimmed != "" {
-					return trimmed, true
-				}
-			}
-		}
-		return "", false
-	}
-	if strings.TrimSpace(homeJWT) == "" {
-		if v, ok := lookupEnv("HOME_JWT", "home_jwt"); ok {
-			homeJWT = v
-		}
-	}
-	if strings.TrimSpace(homeJWT) != "" {
-		log.Error("Home control plane mode is unavailable because PostgreSQL is the required persistence backend")
+	pluginHost := pluginhost.New()
+	if commandLineRequestsHelp(os.Args[1:]) {
+		flag.Parse()
 		return
 	}
-	pgStoreDSN, pgStoreSchema, err = requiredPostgresConfig(lookupEnv)
+
+	bootstrapPath, errBootstrapPath := databaseBootstrapConfigPath(os.Args[1:], DefaultConfigPath)
+	if errBootstrapPath != nil {
+		log.Error(errBootstrapPath)
+		return
+	}
+	configPath = resolveDatabaseBootstrapConfigPath(bootstrapPath, wd)
+
+	pgStoreDSN, pgStoreSchema, err = loadRequiredPostgresConfig(configPath)
 	if err != nil {
 		log.Error(err)
 		return
@@ -210,9 +247,8 @@ func main() {
 			log.WithError(errClose).Error("failed to close postgres store")
 		}
 	}()
-	examplePath := filepath.Join(wd, "config.example.yaml")
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	errBootstrap := pgStoreInst.Bootstrap(ctx, examplePath)
+	errBootstrap := pgStoreInst.Bootstrap(ctx)
 	cancel()
 	if errBootstrap != nil {
 		log.Errorf("failed to bootstrap postgres-backed data: %v", errBootstrap)
@@ -233,6 +269,23 @@ func main() {
 	}
 	cfg.AuthDir = pgStoreInst.AuthDir()
 	log.Infof("required postgres store enabled; temporary workspace: %s", pgStoreInst.WorkDir())
+
+	pluginHost.ApplyConfig(context.Background(), cfg)
+	pluginHost.RegisterCommandLineFlags(context.Background(), flag.CommandLine)
+
+	// Parse the command-line flags after database-backed plugin settings are available.
+	loadedBootstrapPath := configPath
+	flag.Parse()
+	parsedConfigPath := resolveDatabaseBootstrapConfigPath(configPath, wd)
+	if parsedConfigPath != loadedBootstrapPath {
+		log.Errorf("database bootstrap config path changed during flag parsing: %s", parsedConfigPath)
+		return
+	}
+	configPath = parsedConfigPath
+	if strings.TrimSpace(homeJWT) != "" {
+		log.Error("Home control plane mode is unavailable because PostgreSQL is the required persistence backend")
+		return
+	}
 
 	// In cloud deploy mode, check if we have a valid configuration
 	var configFileExists bool
@@ -346,54 +399,10 @@ func main() {
 			return
 		}
 		defer usagestats.CloseIf(usageStatsStore)
-		legacyUsagePaths := []string{
-			filepath.Join(wd, "usage-statistics.json"),
-			filepath.Join(filepath.Dir(configPath), "usage-statistics.json"),
-		}
-		legacyStoreBase := util.WritablePath()
-		if value, okLegacyPath := lookupEnv("PGSTORE_LOCAL_PATH", "pgstore_local_path"); okLegacyPath {
-			legacyStoreBase = value
-		}
-		if legacyStoreBase == "" {
-			legacyStoreBase = wd
-		}
-		legacyUsagePaths = append(legacyUsagePaths, filepath.Join(legacyStoreBase, "pgstore", "config", "usage-statistics.json"))
-		importLegacyUsageStatistics(usageStatsStore, legacyUsagePaths...)
 		serverOptions = append(serverOptions, api.WithUsageStatsStore(usageStatsStore))
 		misc.StartAntigravityVersionUpdater(context.Background())
 		startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
 		cmd.StartServiceWithPluginHost(cfg, configFilePath, pluginHost, serverOptions...)
-	}
-}
-
-func importLegacyUsageStatistics(store *usagestats.Store, paths ...string) {
-	seen := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		path = filepath.Clean(strings.TrimSpace(path))
-		if path == "." || path == "" {
-			continue
-		}
-		if _, exists := seen[path]; exists {
-			continue
-		}
-		seen[path] = struct{}{}
-		data, errRead := os.ReadFile(path)
-		if errors.Is(errRead, os.ErrNotExist) {
-			continue
-		}
-		if errRead != nil {
-			log.WithError(errRead).Warnf("failed to read legacy usage statistics from %s", path)
-			continue
-		}
-		imported, errImport := store.ImportSnapshotIfEmpty(data)
-		if errImport != nil {
-			log.WithError(errImport).Warnf("failed to import legacy usage statistics from %s", path)
-			continue
-		}
-		if imported {
-			log.Infof("legacy usage statistics imported into PostgreSQL from %s", path)
-		}
-		return
 	}
 }
 
@@ -417,60 +426,4 @@ func startModelCatalogUpdaters(localModel, homeEnabled bool) {
 	} else if homeEnabled {
 		log.Info("Home mode: remote models.json updates disabled; Codex client model list follows Home model IDs")
 	}
-}
-
-func pluginBootstrapConfigPath(args []string, defaultPath string) string {
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case arg == "--":
-			return defaultPluginBootstrapConfigPath(defaultPath)
-		case arg == "-config" || arg == "--config":
-			if i+1 < len(args) {
-				return args[i+1]
-			}
-			return defaultPluginBootstrapConfigPath(defaultPath)
-		case strings.HasPrefix(arg, "-config="):
-			return strings.TrimPrefix(arg, "-config=")
-		case strings.HasPrefix(arg, "--config="):
-			return strings.TrimPrefix(arg, "--config=")
-		}
-	}
-	return defaultPluginBootstrapConfigPath(defaultPath)
-}
-
-func defaultPluginBootstrapConfigPath(defaultPath string) string {
-	if strings.TrimSpace(defaultPath) != "" {
-		return defaultPath
-	}
-	wd, errGetwd := os.Getwd()
-	if errGetwd != nil {
-		return "config.yaml"
-	}
-	return filepath.Join(wd, "config.yaml")
-}
-
-func loadPluginBootstrapConfig(path string) *config.Config {
-	raw, errReadFile := os.ReadFile(path)
-	if errReadFile != nil {
-		if !errors.Is(errReadFile, os.ErrNotExist) {
-			log.Warnf("failed to read plugin bootstrap config: %v", errReadFile)
-		}
-		cfg := &config.Config{}
-		cfg.NormalizePluginsConfig()
-		return cfg
-	}
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		cfg := &config.Config{}
-		cfg.NormalizePluginsConfig()
-		return cfg
-	}
-	cfg, errParseConfig := config.ParseConfigBytes(raw)
-	if errParseConfig != nil {
-		log.Warnf("failed to parse plugin bootstrap config: %v", errParseConfig)
-		cfg = &config.Config{}
-		cfg.NormalizePluginsConfig()
-		return cfg
-	}
-	return cfg
 }

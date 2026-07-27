@@ -128,20 +128,17 @@ CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-fo
 
 Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://localhost:8317/`。
 
-项目现在强制依赖 PostgreSQL。配置、认证账号、模型价格和累计用量统计都会持久化到 PostgreSQL。为了兼容现有文件监听机制，进程运行期间会创建临时镜像目录，并在退出时自动删除；本地文件、Git、对象存储和 Home 控制平面持久化模式已停用。
+项目现在强制依赖 PostgreSQL。本地 `config.yaml` 只保存数据库连接；服务设置、认证账号、模型价格和累计用量统计全部持久化到 PostgreSQL，并通过管理中心维护。为了兼容现有文件监听机制，进程运行期间会创建临时镜像目录，并在退出时自动删除。
 
 ```bash
-PGSTORE_DSN=postgresql://user:pass@localhost:5432/cliproxy \
-MANAGEMENT_EMAIL=admin@example.com \
-MANAGEMENT_PASSWORD=change-me-to-a-strong-password \
+cp config.example.yaml config.yaml
+# 修改 config.yaml 中的 postgresql.dsn，然后启动：
 make dev
 ```
 
-`PGSTORE_SCHEMA` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表。
+`postgresql.schema` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表，并向 `config_store` 写入最小系统配置。
 
-如果 `usage_statistics` 中还没有累计数据或手动价格，服务会从旧版本常用的本地位置一次性导入已有 `usage-statistics.json`。旧文件会保留，但此后不会再被写入。
-
-密码至少需要 8 个字符。也可以直接在 `config.yaml` 中设置 `remote-management.email` 和 `remote-management.password`；密码会保持明文，已有 bcrypt 值仍可兼容使用。
+密码至少需要 8 个字符。首次启动后，通过管理中心修改服务设置；这些设置会写入 PostgreSQL，不会写入本地数据库引导 YAML。
 
 需要前端热更新时，分别运行 `make dev-backend` 和 `make web-dev`，然后访问 `http://localhost:5173/`。
 
