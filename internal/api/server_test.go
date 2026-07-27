@@ -1151,7 +1151,7 @@ func TestManagementUsageCostsRequiresManagementAuth(t *testing.T) {
 	if errUnmarshal := json.Unmarshal(authenticatedRecorder.Body.Bytes(), &summary); errUnmarshal != nil {
 		t.Fatalf("unmarshal usage cost response: %v", errUnmarshal)
 	}
-	if summary.Enabled || summary.Accounts == nil || summary.Models == nil {
+	if !summary.Enabled || summary.Accounts == nil || summary.Models == nil {
 		t.Fatalf("unexpected empty usage cost summary: %#v", summary)
 	}
 

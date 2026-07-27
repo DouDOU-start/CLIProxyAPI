@@ -1312,20 +1312,6 @@ export function VisualConfigEditor({
                     />
                   </FieldAnchor>
                 </SectionGrid>
-
-                <SectionGrid>
-                  <FieldAnchor fieldId="usageStatisticsEnabled">
-                    <ToggleRow
-                      title={t('config_management.visual.sections.system.usage_statistics_enabled')}
-                      description={t(
-                        'config_management.visual.sections.system.usage_statistics_enabled_desc'
-                      )}
-                      checked={values.usageStatisticsEnabled}
-                      disabled={disabled}
-                      onChange={(usageStatisticsEnabled) => onChange({ usageStatisticsEnabled })}
-                    />
-                  </FieldAnchor>
-                </SectionGrid>
               </SectionStack>
             </ConfigSection>
 

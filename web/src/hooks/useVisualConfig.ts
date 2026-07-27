@@ -859,7 +859,6 @@ function getNextDirtyFields(
   (
     [
       'errorLogsMaxFiles',
-      'usageStatisticsEnabled',
       'redisUsageQueueRetentionSeconds',
       'pluginsEnabled',
       'passthroughHeaders',
@@ -1072,8 +1071,7 @@ export function useVisualConfig() {
         tlsKey: typeof tls?.key === 'string' ? tls.key : '',
 
         rmAllowRemote: Boolean(remoteManagement?.['allow-remote']),
-        rmEmail:
-          typeof remoteManagement?.email === 'string' ? remoteManagement.email : '',
+        rmEmail: typeof remoteManagement?.email === 'string' ? remoteManagement.email : '',
         rmPassword: '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
@@ -1087,7 +1085,6 @@ export function useVisualConfig() {
         loggingToFile: Boolean(parsed['logging-to-file']),
         logsMaxTotalSizeMb: String(parsed['logs-max-total-size-mb'] ?? ''),
         errorLogsMaxFiles: String(parsed['error-logs-max-files'] ?? ''),
-        usageStatisticsEnabled: Boolean(parsed['usage-statistics-enabled']),
         redisUsageQueueRetentionSeconds: String(
           parsed['redis-usage-queue-retention-seconds'] ?? ''
         ),
@@ -1273,9 +1270,6 @@ export function useVisualConfig() {
         }
         if (dirtyFields.has('errorLogsMaxFiles')) {
           setIntFromStringInDoc(doc, ['error-logs-max-files'], values.errorLogsMaxFiles);
-        }
-        if (dirtyFields.has('usageStatisticsEnabled')) {
-          setBooleanInDoc(doc, ['usage-statistics-enabled'], values.usageStatisticsEnabled);
         }
         if (dirtyFields.has('redisUsageQueueRetentionSeconds')) {
           setIntFromStringInDoc(

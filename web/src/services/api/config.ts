@@ -19,7 +19,4 @@ export const configApi = {
    * 请求日志开关
    */
   updateRequestLog: (enabled: boolean) => apiClient.put('/request-log', { value: enabled }),
-
-  updateUsageStatistics: (enabled: boolean) =>
-    apiClient.put('/usage-statistics-enabled', { value: enabled }),
 };

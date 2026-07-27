@@ -27,7 +27,6 @@ const (
 port: 8317
 auth-dir: ""
 api-keys: []
-usage-statistics-enabled: false
 `
 )
 

@@ -246,13 +246,6 @@ export const CONFIG_FIELD_SEARCH_INDEX: ConfigFieldSearchEntry[] = [
     hintKey: L('sections.system.redis_usage_retention_hint'),
     yamlKeys: ['redis-usage-queue-retention-seconds'],
   },
-  {
-    fieldId: 'usageStatisticsEnabled',
-    sectionId: 'logging',
-    labelKey: L('sections.system.usage_statistics_enabled'),
-    hintKey: L('sections.system.usage_statistics_enabled_desc'),
-    yamlKeys: ['usage-statistics-enabled'],
-  },
   // ── quota ─────────────────────────────────────────────────────────────────
   {
     fieldId: 'quotaSwitchProject',

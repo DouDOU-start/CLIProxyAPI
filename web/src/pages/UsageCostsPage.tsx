@@ -16,7 +16,7 @@ import {
   IconSearch,
   IconTrash2,
 } from '@/components/ui/icons';
-import { configApi, usageCostsApi } from '@/services/api';
+import { usageCostsApi } from '@/services/api';
 import { useNotificationStore } from '@/stores';
 import type {
   AccountUsageSummary,
@@ -85,7 +85,6 @@ export function UsageCostsPage() {
   const [priceDraft, setPriceDraft] = useState<PriceDraft>(emptyPriceDraft);
   const [priceError, setPriceError] = useState('');
   const [savingPrice, setSavingPrice] = useState(false);
-  const [enabling, setEnabling] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -194,19 +193,6 @@ export function UsageCostsPage() {
     });
   };
 
-  const enableCollection = async () => {
-    setEnabling(true);
-    try {
-      await configApi.updateUsageStatistics(true);
-      showNotification(t('usage_costs.enabled'), 'success');
-      await load();
-    } catch (err: unknown) {
-      showNotification(getErrorMessage(err), 'error');
-    } finally {
-      setEnabling(false);
-    }
-  };
-
   const toggleAccount = (account: AccountUsageSummary) => {
     setExpandedAccount((current) => (current === account.account_key ? null : account.account_key));
   };
@@ -231,19 +217,6 @@ export function UsageCostsPage() {
       </header>
 
       {error && <div className="error-box">{error}</div>}
-
-      {summary && !summary.enabled && (
-        <section className={styles.disabledNotice}>
-          <IconAlertTriangle size={19} />
-          <div>
-            <strong>{t('usage_costs.disabled_title')}</strong>
-            <span>{t('usage_costs.disabled_description')}</span>
-          </div>
-          <Button size="sm" onClick={() => void enableCollection()} loading={enabling}>
-            {t('usage_costs.enable_action')}
-          </Button>
-        </section>
-      )}
 
       <section className={styles.metrics} aria-label={t('usage_costs.summary_label')}>
         <div className={styles.primaryMetric}>

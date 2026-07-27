@@ -134,7 +134,7 @@ func (h *Handler) SetConfig(cfg *config.Config) {
 	usageStatsStore := h.usageStatsStore
 	h.mu.Unlock()
 	if usageStatsStore != nil {
-		usageStatsStore.SetEnabled(cfg != nil && !cfg.Home.Enabled && cfg.UsageStatisticsEnabled)
+		usageStatsStore.SetEnabled(true)
 	}
 }
 

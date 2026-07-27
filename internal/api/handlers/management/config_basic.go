@@ -114,20 +114,6 @@ func (h *Handler) GetConfigYAML(c *gin.Context) {
 func (h *Handler) GetDebug(c *gin.Context) { c.JSON(200, gin.H{"debug": h.cfg.Debug}) }
 func (h *Handler) PutDebug(c *gin.Context) { h.updateBoolField(c, func(v bool) { h.cfg.Debug = v }) }
 
-// UsageStatisticsEnabled
-func (h *Handler) GetUsageStatisticsEnabled(c *gin.Context) {
-	c.JSON(200, gin.H{"usage-statistics-enabled": h.cfg.UsageStatisticsEnabled})
-}
-func (h *Handler) PutUsageStatisticsEnabled(c *gin.Context) {
-	h.updateBoolField(c, func(v bool) {
-		h.cfg.UsageStatisticsEnabled = v
-		if store := h.usageStore(); store != nil {
-			store.SetEnabled(v)
-		}
-	})
-}
-
-// UsageStatisticsEnabled
 func (h *Handler) GetLoggingToFile(c *gin.Context) {
 	c.JSON(200, gin.H{"logging-to-file": h.cfg.LoggingToFile})
 }

@@ -307,7 +307,7 @@ func main() {
 			configFileExists = true
 		}
 	}
-	redisqueue.SetUsageStatisticsEnabled(cfg.UsageStatisticsEnabled)
+	redisqueue.SetUsageStatisticsEnabled(true)
 	redisqueue.SetRetentionSeconds(cfg.RedisUsageQueueRetentionSeconds)
 	coreauth.SetQuotaCooldownDisabled(cfg.DisableCooling)
 	coreauth.SetTransientErrorCooldownSeconds(cfg.TransientErrorCooldownSeconds)
@@ -392,7 +392,7 @@ func main() {
 			log.Info("Local model mode: using embedded model catalogs, remote model updates disabled")
 		}
 		ctxUsageStats, cancelUsageStats := context.WithTimeout(context.Background(), 30*time.Second)
-		usageStatsStore, errUsageStats := usagestats.ConfigurePostgres(ctxUsageStats, pgStoreDSN, pgStoreSchema, cfg.UsageStatisticsEnabled)
+		usageStatsStore, errUsageStats := usagestats.ConfigurePostgres(ctxUsageStats, pgStoreDSN, pgStoreSchema, true)
 		cancelUsageStats()
 		if errUsageStats != nil {
 			log.Errorf("failed to initialize required postgres usage statistics store: %v", errUsageStats)

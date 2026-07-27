@@ -76,8 +76,8 @@ type Config struct {
 	// When exceeded, the oldest error log files are deleted. Default is 10. Set to 0 to disable cleanup.
 	ErrorLogsMaxFiles int `yaml:"error-logs-max-files" json:"error-logs-max-files"`
 
-	// UsageStatisticsEnabled toggles in-memory usage aggregation; when false, usage data is discarded.
-	UsageStatisticsEnabled bool `yaml:"usage-statistics-enabled" json:"usage-statistics-enabled"`
+	// UsageStatisticsEnabled is retained for internal compatibility and is always normalized to true.
+	UsageStatisticsEnabled bool `yaml:"-" json:"-"`
 
 	// RedisUsageQueueRetentionSeconds controls how long usage queue items are retained
 	// in memory for Management API consumers.
@@ -730,7 +730,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 		if optional {
 			if os.IsNotExist(err) || errors.Is(err, syscall.EISDIR) {
 				// Missing and optional: return empty config (cloud deploy standby).
-				cfg := &Config{CredentialInFlight: DefaultCredentialInFlightConfig()}
+				cfg := &Config{UsageStatisticsEnabled: true, CredentialInFlight: DefaultCredentialInFlightConfig()}
 				cfg.NormalizePluginsConfig()
 				return cfg, nil
 			}
@@ -740,7 +740,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 
 	// In cloud deploy mode (optional=true), if file is empty or contains only whitespace, return empty config.
 	if optional && len(bytes.TrimSpace(data)) == 0 {
-		cfg := &Config{CredentialInFlight: DefaultCredentialInFlightConfig()}
+		cfg := &Config{UsageStatisticsEnabled: true, CredentialInFlight: DefaultCredentialInFlightConfig()}
 		cfg.NormalizePluginsConfig()
 		return cfg, nil
 	}
@@ -752,7 +752,7 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	cfg.LoggingToFile = false
 	cfg.LogsMaxTotalSizeMB = 0
 	cfg.ErrorLogsMaxFiles = 10
-	cfg.UsageStatisticsEnabled = false
+	cfg.UsageStatisticsEnabled = true
 	cfg.RedisUsageQueueRetentionSeconds = 60
 	cfg.DisableCooling = false
 	cfg.SaveCooldownStatus = false
@@ -765,12 +765,13 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		if optional {
 			// In cloud deploy mode, if YAML parsing fails, return empty config instead of error.
-			cfgOptional := &Config{CredentialInFlight: DefaultCredentialInFlightConfig()}
+			cfgOptional := &Config{UsageStatisticsEnabled: true, CredentialInFlight: DefaultCredentialInFlightConfig()}
 			cfgOptional.NormalizePluginsConfig()
 			return cfgOptional, nil
 		}
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
+	cfg.UsageStatisticsEnabled = true
 
 	cfg.CredentialConcurrency = cfg.CredentialConcurrency.WithDefaults()
 	if errValidate := cfg.CredentialInFlight.Validate(); errValidate != nil {
@@ -1256,6 +1257,7 @@ func SaveConfigPreserveComments(configFile string, cfg *Config) error {
 	removeLegacyOpenAICompatAPIKeys(original.Content[0])
 	removeRemovedIntegrationKeys(original.Content[0])
 	removeLegacyGenerativeLanguageKeys(original.Content[0])
+	removeMapKey(original.Content[0], "usage-statistics-enabled")
 
 	pruneMappingToGeneratedKeys(original.Content[0], generated.Content[0], "oauth-excluded-models")
 	pruneMappingToGeneratedKeys(original.Content[0], generated.Content[0], "oauth-model-alias")

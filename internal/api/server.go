@@ -361,8 +361,7 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	// Initialize management handler
 	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager)
 	if optionState.usageStatsStore != nil {
-		usageStatsEnabled := cfg != nil && !cfg.Home.Enabled && cfg.UsageStatisticsEnabled
-		optionState.usageStatsStore.SetEnabled(usageStatsEnabled)
+		optionState.usageStatsStore.SetEnabled(true)
 		s.usageStatsStore = optionState.usageStatsStore
 		s.mgmt.SetUsageStatsStore(optionState.usageStatsStore)
 	}
@@ -955,10 +954,6 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.GET("/error-logs-max-files", s.mgmt.GetErrorLogsMaxFiles)
 		mgmt.PUT("/error-logs-max-files", s.mgmt.PutErrorLogsMaxFiles)
 		mgmt.PATCH("/error-logs-max-files", s.mgmt.PutErrorLogsMaxFiles)
-
-		mgmt.GET("/usage-statistics-enabled", s.mgmt.GetUsageStatisticsEnabled)
-		mgmt.PUT("/usage-statistics-enabled", s.mgmt.PutUsageStatisticsEnabled)
-		mgmt.PATCH("/usage-statistics-enabled", s.mgmt.PutUsageStatisticsEnabled)
 
 		mgmt.GET("/proxy-url", s.mgmt.GetProxyURL)
 		mgmt.PUT("/proxy-url", s.mgmt.PutProxyURL)
@@ -1950,9 +1945,7 @@ func (s *Server) UpdateClientsContext(ctx context.Context, cfg *config.Config) b
 		}
 	}
 
-	if oldCfg == nil || oldCfg.UsageStatisticsEnabled != cfg.UsageStatisticsEnabled {
-		redisqueue.SetUsageStatisticsEnabled(cfg.UsageStatisticsEnabled)
-	}
+	redisqueue.SetUsageStatisticsEnabled(true)
 
 	if oldCfg == nil || oldCfg.RedisUsageQueueRetentionSeconds != cfg.RedisUsageQueueRetentionSeconds {
 		redisqueue.SetRetentionSeconds(cfg.RedisUsageQueueRetentionSeconds)
