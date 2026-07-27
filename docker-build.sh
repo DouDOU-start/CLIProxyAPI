@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build.sh - Linux/macOS Build Script
+# build.sh - Linux Build Script
 #
 # This script automates the process of building and running the Docker container
 # with version information dynamically injected at build time.
