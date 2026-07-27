@@ -18,13 +18,13 @@ func costMicrosForAggregate(aggregate Aggregate, price ModelPrice) int64 {
 		uncachedInputTokens = maxInt64(inputTokens-cacheReadTokens-cacheWriteTokens, 0)
 	}
 
-	cacheReadRate := price.CacheReadMicrosPerMillion
-	if !price.CacheReadConfigured {
-		cacheReadRate = price.InputMicrosPerMillion / 10
+	cacheReadRate := int64(0)
+	if price.CacheReadConfigured {
+		cacheReadRate = price.CacheReadMicrosPerMillion
 	}
-	cacheWriteRate := price.CacheWriteMicrosPerMillion
-	if !price.CacheWriteConfigured {
-		cacheWriteRate = price.InputMicrosPerMillion
+	cacheWriteRate := int64(0)
+	if price.CacheWriteConfigured {
+		cacheWriteRate = price.CacheWriteMicrosPerMillion
 	}
 
 	longInput := clampInt64(aggregate.LongInputTokens, uncachedInputTokens)

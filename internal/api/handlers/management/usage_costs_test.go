@@ -49,7 +49,7 @@ func TestUsageCostsManagementFlow(t *testing.T) {
 		t.Fatalf("unexpected price response: %#v", price)
 	}
 	if price.CacheReadConfigured || price.CacheWriteConfigured {
-		t.Fatalf("optional cache prices should be automatic: %#v", price)
+		t.Fatalf("optional cache prices should remain unconfigured: %#v", price)
 	}
 
 	store.HandleUsage(context.Background(), coreusage.Record{

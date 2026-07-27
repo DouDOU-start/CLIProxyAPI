@@ -251,12 +251,12 @@ export function ModelPricesPage() {
                     <td>
                       {price.cache_read_configured
                         ? formatRate(price.cache_read_per_million_usd)
-                        : t('model_prices.auto_price')}
+                        : t('model_prices.unconfigured_price')}
                     </td>
                     <td>
                       {price.cache_write_configured
                         ? formatRate(price.cache_write_per_million_usd)
-                        : t('model_prices.auto_price')}
+                        : t('model_prices.unconfigured_price')}
                     </td>
                     <td>
                       <span className={`${styles.sourceBadge} ${styles[`source_${price.source}`] ?? ''}`}>
@@ -367,7 +367,7 @@ export function ModelPricesPage() {
               onChange={(event) =>
                 setPriceDraft((draft) => ({ ...draft, cacheRead: event.target.value }))
               }
-              placeholder={t('model_prices.auto_price')}
+              placeholder={t('model_prices.unconfigured_price')}
             />
             <Input
               type="number"
@@ -379,7 +379,7 @@ export function ModelPricesPage() {
               onChange={(event) =>
                 setPriceDraft((draft) => ({ ...draft, cacheWrite: event.target.value }))
               }
-              placeholder={t('model_prices.auto_price')}
+              placeholder={t('model_prices.unconfigured_price')}
             />
           </div>
           <div className={styles.priceUnit}>

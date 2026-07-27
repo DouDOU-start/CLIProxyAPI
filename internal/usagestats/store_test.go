@@ -109,6 +109,29 @@ func TestStoreUsesBuiltinPriceForUsageCost(t *testing.T) {
 	}
 }
 
+func TestStoreUsesZeroForUnpricedModel(t *testing.T) {
+	store, errStore := NewStore(filepath.Join(t.TempDir(), storageFileName), true)
+	if errStore != nil {
+		t.Fatalf("NewStore() error = %v", errStore)
+	}
+	defer store.Close()
+	store.HandleUsage(context.Background(), coreusage.Record{
+		Provider:  "openai",
+		Model:     "unpriced-model",
+		AuthIndex: "auth-index-1",
+		Detail: coreusage.Detail{
+			InputTokens:  1_000_000,
+			OutputTokens: 1_000_000,
+			TotalTokens:  2_000_000,
+		},
+	})
+
+	summary := store.Summary()
+	if summary.CostMicros != 0 || summary.UnpricedCalls != 1 {
+		t.Fatalf("summary with unpriced model = %#v", summary)
+	}
+}
+
 func TestStorePersistsAccountUsageWithoutRawAPIKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), storageFileName)
 	store, errStore := NewStore(path, true)

@@ -66,6 +66,25 @@ func TestCostMicrosTreatsClaudeCacheAsSeparateInput(t *testing.T) {
 	}
 }
 
+func TestCostMicrosUsesZeroForUnconfiguredCachePrices(t *testing.T) {
+	aggregate := Aggregate{
+		Provider:         "openai",
+		Model:            "gpt-cached",
+		InputTokens:      1_000_000,
+		CacheReadTokens:  250_000,
+		CacheWriteTokens: 100_000,
+	}
+	price := ModelPrice{
+		InputMicrosPerMillion:      2_000_000,
+		CacheReadMicrosPerMillion:  9_000_000,
+		CacheWriteMicrosPerMillion: 9_000_000,
+	}
+
+	if got := costMicrosForAggregate(aggregate, price); got != 1_300_000 {
+		t.Fatalf("cost = %d micro-dollars, want 1300000", got)
+	}
+}
+
 func TestCostMicrosAppliesKnownServiceTierMultiplier(t *testing.T) {
 	aggregate := Aggregate{
 		Provider:    "openai",
