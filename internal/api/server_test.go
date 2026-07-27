@@ -390,6 +390,12 @@ func newTestServerWithOptions(t *testing.T, opts ...ServerOption) *Server {
 	accessManager := sdkaccess.NewManager()
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
+	usageStatsStore, errUsageStats := usagestats.NewStore(filepath.Join(tmpDir, "usage-statistics.json"), false)
+	if errUsageStats != nil {
+		t.Fatalf("failed to create usage statistics store: %v", errUsageStats)
+	}
+	t.Cleanup(usageStatsStore.Close)
+	opts = append(opts, WithUsageStatsStore(usageStatsStore))
 	return NewServer(cfg, authManager, accessManager, configPath, opts...)
 }
 

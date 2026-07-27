@@ -88,6 +88,7 @@ type serverOptionConfig struct {
 	pluginHost            *pluginhost.Host
 	configReloadHook      func(context.Context, *config.Config)
 	exampleAPIKeySafeMode bool
+	usageStatsStore       *usagestats.Store
 }
 
 // ServerOption customises HTTP server construction.
@@ -184,6 +185,13 @@ func WithConfigReloadHook(hook func(context.Context, *config.Config)) ServerOpti
 func WithExampleAPIKeySafeMode() ServerOption {
 	return func(cfg *serverOptionConfig) {
 		cfg.exampleAPIKeySafeMode = true
+	}
+}
+
+// WithUsageStatsStore provides the persistent usage statistics store used by management APIs.
+func WithUsageStatsStore(store *usagestats.Store) ServerOption {
+	return func(cfg *serverOptionConfig) {
+		cfg.usageStatsStore = store
 	}
 }
 
@@ -344,15 +352,11 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	applySignatureCacheConfig(nil, cfg)
 	// Initialize management handler
 	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager)
-	if cfg != nil {
-		usageStatsEnabled := !cfg.Home.Enabled && cfg.UsageStatisticsEnabled
-		usageStatsStore, errUsageStats := usagestats.Configure(usagestats.ResolveStoragePath(configFilePath), usageStatsEnabled)
-		if errUsageStats != nil {
-			log.WithError(errUsageStats).Warn("failed to initialize account cost statistics")
-		} else {
-			s.usageStatsStore = usageStatsStore
-			s.mgmt.SetUsageStatsStore(usageStatsStore)
-		}
+	if optionState.usageStatsStore != nil {
+		usageStatsEnabled := cfg != nil && !cfg.Home.Enabled && cfg.UsageStatisticsEnabled
+		optionState.usageStatsStore.SetEnabled(usageStatsEnabled)
+		s.usageStatsStore = optionState.usageStatsStore
+		s.mgmt.SetUsageStatsStore(optionState.usageStatsStore)
 	}
 	s.mgmt.SetPluginHost(optionState.pluginHost)
 	s.mgmt.SetConfigReloadHook(optionState.configReloadHook)

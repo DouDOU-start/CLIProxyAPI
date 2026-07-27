@@ -43,6 +43,9 @@ type PostgresStore struct {
 	configPath string
 	authDir    string
 	mu         sync.Mutex
+	temporary  bool
+	closeOnce  sync.Once
+	closeErr   error
 }
 
 // NewPostgresStore establishes a connection to PostgreSQL and prepares the local workspace.
@@ -60,32 +63,46 @@ func NewPostgresStore(ctx context.Context, cfg PostgresStoreConfig) (*PostgresSt
 	}
 
 	spoolRoot := strings.TrimSpace(cfg.SpoolDir)
+	temporarySpool := false
+	var err error
 	if spoolRoot == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			spoolRoot = filepath.Join(cwd, "pgstore")
-		} else {
-			spoolRoot = filepath.Join(os.TempDir(), "pgstore")
+		spoolRoot, err = os.MkdirTemp("", "cliproxy-pgstore-*")
+		if err != nil {
+			return nil, fmt.Errorf("postgres store: create temporary workspace: %w", err)
 		}
+		temporarySpool = true
 	}
 	absSpool, err := filepath.Abs(spoolRoot)
 	if err != nil {
+		if temporarySpool {
+			_ = os.RemoveAll(spoolRoot)
+		}
 		return nil, fmt.Errorf("postgres store: resolve spool directory: %w", err)
+	}
+	cleanupWorkspace := func() {
+		if temporarySpool {
+			_ = os.RemoveAll(absSpool)
+		}
 	}
 	configDir := filepath.Join(absSpool, "config")
 	authDir := filepath.Join(absSpool, "auths")
 	if err = os.MkdirAll(configDir, 0o700); err != nil {
+		cleanupWorkspace()
 		return nil, fmt.Errorf("postgres store: create config directory: %w", err)
 	}
 	if err = os.MkdirAll(authDir, 0o700); err != nil {
+		cleanupWorkspace()
 		return nil, fmt.Errorf("postgres store: create auth directory: %w", err)
 	}
 
 	db, err := sql.Open("pgx", cfg.DSN)
 	if err != nil {
+		cleanupWorkspace()
 		return nil, fmt.Errorf("postgres store: open database connection: %w", err)
 	}
 	if err = db.PingContext(ctx); err != nil {
 		_ = db.Close()
+		cleanupWorkspace()
 		return nil, fmt.Errorf("postgres store: ping database: %w", err)
 	}
 
@@ -95,16 +112,31 @@ func NewPostgresStore(ctx context.Context, cfg PostgresStoreConfig) (*PostgresSt
 		spoolRoot:  absSpool,
 		configPath: filepath.Join(configDir, "config.yaml"),
 		authDir:    authDir,
+		temporary:  temporarySpool,
 	}
 	return store, nil
 }
 
-// Close releases the underlying database connection.
+// Close releases the database connection and removes an owned temporary workspace.
 func (s *PostgresStore) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil {
 		return nil
 	}
-	return s.db.Close()
+	s.closeOnce.Do(func() {
+		var closeErrors []error
+		if s.db != nil {
+			if errClose := s.db.Close(); errClose != nil {
+				closeErrors = append(closeErrors, fmt.Errorf("postgres store: close database: %w", errClose))
+			}
+		}
+		if s.temporary && s.spoolRoot != "" {
+			if errRemove := os.RemoveAll(s.spoolRoot); errRemove != nil {
+				closeErrors = append(closeErrors, fmt.Errorf("postgres store: remove temporary workspace: %w", errRemove))
+			}
+		}
+		s.closeErr = errors.Join(closeErrors...)
+	})
+	return s.closeErr
 }
 
 // EnsureSchema creates the required tables (and schema when provided).

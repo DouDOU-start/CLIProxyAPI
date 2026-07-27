@@ -23,7 +23,8 @@ remote-management:
   email: ""
   password: ""
 
-# Authentication directory (supports ~ for home directory)
+# Runtime authentication mirror. The server overrides this with a temporary directory
+# because PostgreSQL is the persistent authentication source.
 auth-dir: "~/.cli-proxy-api"
 
 # API keys for authentication

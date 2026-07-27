@@ -128,11 +128,18 @@ CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-fo
 
 Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://localhost:8317/`。
 
+项目现在强制依赖 PostgreSQL。配置、认证账号、模型价格和累计用量统计都会持久化到 PostgreSQL。为了兼容现有文件监听机制，进程运行期间会创建临时镜像目录，并在退出时自动删除；本地文件、Git、对象存储和 Home 控制平面持久化模式已停用。
+
 ```bash
+PGSTORE_DSN=postgresql://user:pass@localhost:5432/cliproxy \
 MANAGEMENT_EMAIL=admin@example.com \
 MANAGEMENT_PASSWORD=change-me-to-a-strong-password \
 make dev
 ```
+
+`PGSTORE_SCHEMA` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表。
+
+如果 `usage_statistics` 中还没有累计数据或手动价格，服务会从旧版本常用的本地位置一次性导入已有 `usage-statistics.json`。旧文件会保留，但此后不会再被写入。
 
 密码至少需要 8 个字符。也可以直接在 `config.yaml` 中设置 `remote-management.email` 和 `remote-management.password`；密码会保持明文，已有 bcrypt 值仍可兼容使用。
 
@@ -144,7 +151,11 @@ make dev
 
 ## 使用量统计
 
-自v6.10.0版本以后，CLIProxyAPI及 [CPAMC](https://github.com/router-for-me/Cli-Proxy-API-Management-Center) 项目不再预置数据统计功能，如果有数据统计需求的请使用以下项目：
+管理中心已经内置按账号、按模型聚合的 token 与费用统计。模型价格和累计统计与其他服务状态一起保存到 PostgreSQL。
+
+当前保存的是累计聚合值，不是逐请求明细。关闭统计只会停止采集新记录，不会删除已有累计数据或模型价格。
+
+其他兼容的用量工具包括：
 
 ### [CPA Usage Keeper](https://github.com/Willxup/cpa-usage-keeper)
 

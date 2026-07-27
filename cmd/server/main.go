@@ -8,8 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,8 +19,6 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/buildinfo"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cmd"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/home"
-	"github.com/router-for-me/CLIProxyAPI/v7/internal/homeplugins"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/logging"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
@@ -31,10 +27,10 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/safemode"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/store"
 	_ "github.com/router-for-me/CLIProxyAPI/v7/internal/translator"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/usagestats"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v7/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
-	sdkpluginstore "github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginstore"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -58,6 +54,18 @@ func shouldEnableExampleAPIKeySafeMode(cfg *config.Config, commandMode, cloudCon
 		return false
 	}
 	return safemode.HasExampleAPIKeys(cfg.APIKeys)
+}
+
+func requiredPostgresConfig(lookup func(...string) (string, bool)) (dsn, schema string, err error) {
+	if lookup == nil {
+		return "", "", fmt.Errorf("PGSTORE_DSN is required")
+	}
+	dsn, ok := lookup("PGSTORE_DSN", "pgstore_dsn")
+	if !ok {
+		return "", "", fmt.Errorf("PGSTORE_DSN is required; local, Git, and object storage backends are disabled")
+	}
+	schema, _ = lookup("PGSTORE_SCHEMA", "pgstore_schema")
+	return dsn, schema, nil
 }
 
 // main is the entry point of the application.
@@ -135,31 +143,10 @@ func main() {
 	var err error
 	var cfg *config.Config
 	var isCloudDeploy bool
-	var configLoadedFromHome bool
-	var homeClient *home.Client
-	var homePluginSyncReport homeplugins.SyncReport
-	var homePluginStatusReady bool
 	var (
-		usePostgresStore     bool
-		pgStoreDSN           string
-		pgStoreSchema        string
-		pgStoreLocalPath     string
-		pgStoreInst          *store.PostgresStore
-		useGitStore          bool
-		gitStoreRemoteURL    string
-		gitStoreUser         string
-		gitStorePassword     string
-		gitStoreBranch       string
-		gitStoreLocalPath    string
-		gitStoreInst         *store.GitTokenStore
-		gitStoreRoot         string
-		useObjectStore       bool
-		objectStoreEndpoint  string
-		objectStoreAccess    string
-		objectStoreSecret    string
-		objectStoreBucket    string
-		objectStoreLocalPath string
-		objectStoreInst      *store.ObjectTokenStore
+		pgStoreDSN    string
+		pgStoreSchema string
+		pgStoreInst   *store.PostgresStore
 	)
 
 	wd, err := os.Getwd()
@@ -185,65 +172,19 @@ func main() {
 		}
 		return "", false
 	}
-	writableBase := util.WritablePath()
-
 	if strings.TrimSpace(homeJWT) == "" {
 		if v, ok := lookupEnv("HOME_JWT", "home_jwt"); ok {
 			homeJWT = v
 		}
 	}
-
-	if value, ok := lookupEnv("PGSTORE_DSN", "pgstore_dsn"); ok {
-		usePostgresStore = true
-		pgStoreDSN = value
+	if strings.TrimSpace(homeJWT) != "" {
+		log.Error("Home control plane mode is unavailable because PostgreSQL is the required persistence backend")
+		return
 	}
-	if usePostgresStore {
-		if value, ok := lookupEnv("PGSTORE_SCHEMA", "pgstore_schema"); ok {
-			pgStoreSchema = value
-		}
-		if value, ok := lookupEnv("PGSTORE_LOCAL_PATH", "pgstore_local_path"); ok {
-			pgStoreLocalPath = value
-		}
-		if pgStoreLocalPath == "" {
-			if writableBase != "" {
-				pgStoreLocalPath = writableBase
-			} else {
-				pgStoreLocalPath = wd
-			}
-		}
-		useGitStore = false
-	}
-	if value, ok := lookupEnv("GITSTORE_GIT_URL", "gitstore_git_url"); ok {
-		useGitStore = true
-		gitStoreRemoteURL = value
-	}
-	if value, ok := lookupEnv("GITSTORE_GIT_USERNAME", "gitstore_git_username"); ok {
-		gitStoreUser = value
-	}
-	if value, ok := lookupEnv("GITSTORE_GIT_TOKEN", "gitstore_git_token"); ok {
-		gitStorePassword = value
-	}
-	if value, ok := lookupEnv("GITSTORE_LOCAL_PATH", "gitstore_local_path"); ok {
-		gitStoreLocalPath = value
-	}
-	if value, ok := lookupEnv("GITSTORE_GIT_BRANCH", "gitstore_git_branch"); ok {
-		gitStoreBranch = value
-	}
-	if value, ok := lookupEnv("OBJECTSTORE_ENDPOINT", "objectstore_endpoint"); ok {
-		useObjectStore = true
-		objectStoreEndpoint = value
-	}
-	if value, ok := lookupEnv("OBJECTSTORE_ACCESS_KEY", "objectstore_access_key"); ok {
-		objectStoreAccess = value
-	}
-	if value, ok := lookupEnv("OBJECTSTORE_SECRET_KEY", "objectstore_secret_key"); ok {
-		objectStoreSecret = value
-	}
-	if value, ok := lookupEnv("OBJECTSTORE_BUCKET", "objectstore_bucket"); ok {
-		objectStoreBucket = value
-	}
-	if value, ok := lookupEnv("OBJECTSTORE_LOCAL_PATH", "objectstore_local_path"); ok {
-		objectStoreLocalPath = value
+	pgStoreDSN, pgStoreSchema, err = requiredPostgresConfig(lookupEnv)
+	if err != nil {
+		log.Error(err)
+		return
 	}
 
 	// Check for cloud deploy mode only on first execution
@@ -253,261 +194,32 @@ func main() {
 		isCloudDeploy = true
 	}
 
-	// Determine and load the configuration file.
-	// Prefer the Postgres store when configured, otherwise fallback to git or local files.
-	var configFilePath string
-	if strings.TrimSpace(homeJWT) != "" {
-		configLoadedFromHome = true
-		ctxHome, cancelHome := context.WithTimeout(context.Background(), 30*time.Second)
-		homeCfg, errHomeCfg := home.ConfigFromJWT(ctxHome, homeJWT)
-		cancelHome()
-		if errHomeCfg != nil {
-			log.Errorf("invalid -home-jwt: %v", errHomeCfg)
-			return
-		}
-		if homeDisableClusterDiscovery {
-			homeCfg.DisableClusterDiscovery = true
-		}
-		homeClient = home.New(homeCfg)
-		defer homeClient.Close()
-
-		ctxHomeConfig, cancelHomeConfig := context.WithTimeout(context.Background(), 30*time.Second)
-		raw, errGetConfig := homeClient.GetConfig(ctxHomeConfig)
-		cancelHomeConfig()
-		if errGetConfig != nil {
-			log.Errorf("failed to fetch config from home: %v", errGetConfig)
-			return
-		}
-
-		parsed, errParseConfig := config.ParseConfigBytes(raw)
-		if errParseConfig != nil {
-			log.Errorf("failed to parse config payload from home: %v", errParseConfig)
-			return
-		}
-		if parsed == nil {
-			parsed = &config.Config{}
-		}
-		parsed.Home = homeCfg
-		parsed.Port = 8317 // Default to 8317 for home mode, can be overridden by home config
-		parsed.UsageStatisticsEnabled = true
-		pluginSyncCfg := *parsed
-		parsed.Plugins.StoreAuth = nil
-		var errHomePlugins error
-		platform := homeplugins.CurrentPlatform()
-		if pluginSyncCfg.Plugins.Enabled {
-			ctxHomePlugins, cancelHomePlugins := context.WithTimeout(context.Background(), 30*time.Second)
-			installedVersions, errInstalledPlugins := homeplugins.InstalledVersions(&pluginSyncCfg)
-			if errInstalledPlugins != nil {
-				homePluginStatusReady = true
-				errHomePlugins = errInstalledPlugins
-				homePluginSyncReport = homeplugins.CompletedSyncReport(platform, errInstalledPlugins)
-			} else {
-				pluginSyncRequest := sdkpluginstore.PluginSyncRequest{
-					SchemaVersion:     sdkpluginstore.PluginSyncSchemaVersion,
-					GOOS:              platform.GOOS,
-					GOARCH:            platform.GOARCH,
-					InstalledVersions: installedVersions,
-				}
-				pluginSyncResponse, errFetchPlugins := homeClient.GetPluginSync(ctxHomePlugins, pluginSyncRequest)
-				errHomePlugins = errFetchPlugins
-				switch {
-				case errHomePlugins == nil:
-					homePluginStatusReady = true
-					homePluginSyncReport, errHomePlugins = homeplugins.SyncResolvedWithReport(ctxHomePlugins, &pluginSyncCfg, pluginSyncResponse.Items, pluginSyncResponse.ExpiresAt, pluginSyncRequest.InstalledVersions, pluginHost)
-				case errors.Is(errHomePlugins, home.ErrPluginSyncUnsupported):
-					homePluginStatusReady = true
-					homePluginSyncReport, errHomePlugins = homeplugins.SyncWithReport(ctxHomePlugins, &pluginSyncCfg, pluginHost)
-				default:
-					homePluginStatusReady = true
-					homePluginSyncReport = homeplugins.CompletedSyncReport(platform, errHomePlugins)
-				}
-				pluginSyncRequest.Clear()
-				pluginSyncResponse.Clear()
-			}
-			cancelHomePlugins()
-		} else {
-			homePluginStatusReady = true
-			homePluginSyncReport = homeplugins.CompletedSyncReport(platform, nil)
-		}
-		if errHomePlugins != nil {
-			log.Errorf("failed to sync plugins from home: %v", errHomePlugins)
-		}
-		if homePluginStatusReady {
-			errReportPlugins := home.ReportPluginStatus(context.Background(), homeClient, homeCfg.NodeID, homePluginSyncReport)
-			if errReportPlugins != nil {
-				log.Warnf("failed to report home plugin sync status: %v", errReportPlugins)
-			}
-		}
-		if errHomePlugins != nil {
-			return
-		}
-		cfg = parsed
-
-		// Keep a non-empty config path for downstream components (log paths, management assets, etc),
-		// but do not require the file to exist when loading config from home.
-		if strings.TrimSpace(configPath) != "" {
-			configFilePath = configPath
-		} else {
-			configFilePath = filepath.Join(wd, "config.yaml")
-		}
-
-		// Local stores are intentionally disabled when config is loaded from home.
-		usePostgresStore = false
-		useObjectStore = false
-		useGitStore = false
-	} else if usePostgresStore {
-		if pgStoreLocalPath == "" {
-			pgStoreLocalPath = wd
-		}
-		pgStoreLocalPath = filepath.Join(pgStoreLocalPath, "pgstore")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		pgStoreInst, err = store.NewPostgresStore(ctx, store.PostgresStoreConfig{
-			DSN:      pgStoreDSN,
-			Schema:   pgStoreSchema,
-			SpoolDir: pgStoreLocalPath,
-		})
-		cancel()
-		if err != nil {
-			log.Errorf("failed to initialize postgres token store: %v", err)
-			return
-		}
-		examplePath := filepath.Join(wd, "config.example.yaml")
-		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-		if errBootstrap := pgStoreInst.Bootstrap(ctx, examplePath); errBootstrap != nil {
-			cancel()
-			log.Errorf("failed to bootstrap postgres-backed config: %v", errBootstrap)
-			return
-		}
-		cancel()
-		configFilePath = pgStoreInst.ConfigPath()
-		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
-		if err == nil {
-			cfg.AuthDir = pgStoreInst.AuthDir()
-			log.Infof("postgres-backed token store enabled, workspace path: %s", pgStoreInst.WorkDir())
-		}
-	} else if useObjectStore {
-		if objectStoreLocalPath == "" {
-			if writableBase != "" {
-				objectStoreLocalPath = writableBase
-			} else {
-				objectStoreLocalPath = wd
-			}
-		}
-		objectStoreRoot := filepath.Join(objectStoreLocalPath, "objectstore")
-		resolvedEndpoint := strings.TrimSpace(objectStoreEndpoint)
-		useSSL := true
-		if strings.Contains(resolvedEndpoint, "://") {
-			parsed, errParse := url.Parse(resolvedEndpoint)
-			if errParse != nil {
-				log.Errorf("failed to parse object store endpoint %q: %v", objectStoreEndpoint, errParse)
-				return
-			}
-			switch strings.ToLower(parsed.Scheme) {
-			case "http":
-				useSSL = false
-			case "https":
-				useSSL = true
-			default:
-				log.Errorf("unsupported object store scheme %q (only http and https are allowed)", parsed.Scheme)
-				return
-			}
-			if parsed.Host == "" {
-				log.Errorf("object store endpoint %q is missing host information", objectStoreEndpoint)
-				return
-			}
-			resolvedEndpoint = parsed.Host
-			if parsed.Path != "" && parsed.Path != "/" {
-				resolvedEndpoint = strings.TrimSuffix(parsed.Host+parsed.Path, "/")
-			}
-		}
-		resolvedEndpoint = strings.TrimRight(resolvedEndpoint, "/")
-		objCfg := store.ObjectStoreConfig{
-			Endpoint:  resolvedEndpoint,
-			Bucket:    objectStoreBucket,
-			AccessKey: objectStoreAccess,
-			SecretKey: objectStoreSecret,
-			LocalRoot: objectStoreRoot,
-			UseSSL:    useSSL,
-			PathStyle: true,
-		}
-		objectStoreInst, err = store.NewObjectTokenStore(objCfg)
-		if err != nil {
-			log.Errorf("failed to initialize object token store: %v", err)
-			return
-		}
-		examplePath := filepath.Join(wd, "config.example.yaml")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if errBootstrap := objectStoreInst.Bootstrap(ctx, examplePath); errBootstrap != nil {
-			cancel()
-			log.Errorf("failed to bootstrap object-backed config: %v", errBootstrap)
-			return
-		}
-		cancel()
-		configFilePath = objectStoreInst.ConfigPath()
-		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
-		if err == nil {
-			if cfg == nil {
-				cfg = &config.Config{}
-			}
-			cfg.AuthDir = objectStoreInst.AuthDir()
-			log.Infof("object-backed token store enabled, bucket: %s", objectStoreBucket)
-		}
-	} else if useGitStore {
-		if gitStoreLocalPath == "" {
-			if writableBase != "" {
-				gitStoreLocalPath = writableBase
-			} else {
-				gitStoreLocalPath = wd
-			}
-		}
-		gitStoreRoot = filepath.Join(gitStoreLocalPath, "gitstore")
-		authDir := filepath.Join(gitStoreRoot, "auths")
-		gitStoreInst = store.NewGitTokenStore(gitStoreRemoteURL, gitStoreUser, gitStorePassword, gitStoreBranch)
-		gitStoreInst.SetBaseDir(authDir)
-		if errRepo := gitStoreInst.EnsureRepository(); errRepo != nil {
-			log.Errorf("failed to prepare git token store: %v", errRepo)
-			return
-		}
-		configFilePath = gitStoreInst.ConfigPath()
-		if configFilePath == "" {
-			configFilePath = filepath.Join(gitStoreRoot, "config", "config.yaml")
-		}
-		if _, statErr := os.Stat(configFilePath); errors.Is(statErr, fs.ErrNotExist) {
-			examplePath := filepath.Join(wd, "config.example.yaml")
-			if _, errExample := os.Stat(examplePath); errExample != nil {
-				log.Errorf("failed to find template config file: %v", errExample)
-				return
-			}
-			if errCopy := misc.CopyConfigTemplate(examplePath, configFilePath); errCopy != nil {
-				log.Errorf("failed to bootstrap git-backed config: %v", errCopy)
-				return
-			}
-			if errCommit := gitStoreInst.PersistConfig(context.Background()); errCommit != nil {
-				log.Errorf("failed to commit initial git-backed config: %v", errCommit)
-				return
-			}
-			log.Infof("git-backed config initialized from template: %s", configFilePath)
-		} else if statErr != nil {
-			log.Errorf("failed to inspect git-backed config: %v", statErr)
-			return
-		}
-		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
-		if err == nil {
-			cfg.AuthDir = gitStoreInst.AuthDir()
-			log.Infof("git-backed token store enabled, repository path: %s", gitStoreRoot)
-		}
-	} else if configPath != "" {
-		configFilePath = configPath
-		cfg, err = config.LoadConfigOptional(configPath, isCloudDeploy)
-	} else {
-		wd, err = os.Getwd()
-		if err != nil {
-			log.Errorf("failed to get working directory: %v", err)
-			return
-		}
-		configFilePath = filepath.Join(wd, "config.yaml")
-		cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
+	// PostgreSQL is the only persistent source. The local workspace is temporary and removed on exit.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	pgStoreInst, err = store.NewPostgresStore(ctx, store.PostgresStoreConfig{
+		DSN:    pgStoreDSN,
+		Schema: pgStoreSchema,
+	})
+	cancel()
+	if err != nil {
+		log.Errorf("failed to initialize required postgres store: %v", err)
+		return
 	}
+	defer func() {
+		if errClose := pgStoreInst.Close(); errClose != nil {
+			log.WithError(errClose).Error("failed to close postgres store")
+		}
+	}()
+	examplePath := filepath.Join(wd, "config.example.yaml")
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	errBootstrap := pgStoreInst.Bootstrap(ctx, examplePath)
+	cancel()
+	if errBootstrap != nil {
+		log.Errorf("failed to bootstrap postgres-backed data: %v", errBootstrap)
+		return
+	}
+	configFilePath := pgStoreInst.ConfigPath()
+	cfg, err = config.LoadConfigOptional(configFilePath, isCloudDeploy)
 	if err != nil {
 		log.Errorf("failed to load config: %v", err)
 		return
@@ -515,29 +227,31 @@ func main() {
 	if cfg == nil {
 		cfg = &config.Config{}
 	}
+	if cfg.Home.Enabled {
+		log.Error("Home control plane configuration is unavailable because PostgreSQL is the required persistence backend")
+		return
+	}
+	cfg.AuthDir = pgStoreInst.AuthDir()
+	log.Infof("required postgres store enabled; temporary workspace: %s", pgStoreInst.WorkDir())
 
 	// In cloud deploy mode, check if we have a valid configuration
 	var configFileExists bool
 	if isCloudDeploy {
-		if configLoadedFromHome && cfg != nil {
-			configFileExists = cfg.Port != 0
+		if info, errStat := os.Stat(configFilePath); errStat != nil {
+			// Don't mislead: API server will not start until configuration is provided.
+			log.Info("Cloud deploy mode: No configuration file detected; standing by for configuration")
+			configFileExists = false
+		} else if info.IsDir() {
+			log.Info("Cloud deploy mode: Config path is a directory; standing by for configuration")
+			configFileExists = false
+		} else if cfg.Port == 0 {
+			// LoadConfigOptional returns empty config when file is empty or invalid.
+			// Config file exists but is empty or invalid; treat as missing config
+			log.Info("Cloud deploy mode: Configuration file is empty or invalid; standing by for valid configuration")
+			configFileExists = false
 		} else {
-			if info, errStat := os.Stat(configFilePath); errStat != nil {
-				// Don't mislead: API server will not start until configuration is provided.
-				log.Info("Cloud deploy mode: No configuration file detected; standing by for configuration")
-				configFileExists = false
-			} else if info.IsDir() {
-				log.Info("Cloud deploy mode: Config path is a directory; standing by for configuration")
-				configFileExists = false
-			} else if cfg.Port == 0 {
-				// LoadConfigOptional returns empty config when file is empty or invalid.
-				// Config file exists but is empty or invalid; treat as missing config
-				log.Info("Cloud deploy mode: Configuration file is empty or invalid; standing by for valid configuration")
-				configFileExists = false
-			} else {
-				log.Info("Cloud deploy mode: Configuration file detected; starting service")
-				configFileExists = true
-			}
+			log.Info("Cloud deploy mode: Configuration file detected; starting service")
+			configFileExists = true
 		}
 	}
 	redisqueue.SetUsageStatisticsEnabled(cfg.UsageStatisticsEnabled)
@@ -569,7 +283,7 @@ func main() {
 
 	commandMode := vertexImport != "" || antigravityLogin || codexLogin || codexDeviceLogin || claudeLogin || kimiLogin || xaiLogin
 	cloudConfigMissing := isCloudDeploy && !configFileExists
-	homeMode := configLoadedFromHome || (cfg != nil && cfg.Home.Enabled)
+	homeMode := cfg != nil && cfg.Home.Enabled
 	exampleAPIKeySafeMode := shouldEnableExampleAPIKeySafeMode(cfg, commandMode, cloudConfigMissing, homeMode)
 	serverOptions := []api.ServerOption(nil)
 	if exampleAPIKeySafeMode {
@@ -578,33 +292,12 @@ func main() {
 		serverOptions = append(serverOptions, api.WithExampleAPIKeySafeMode())
 	}
 
-	// Register the shared token store once so all components use the same persistence backend.
-	if usePostgresStore {
-		sdkAuth.RegisterTokenStore(pgStoreInst)
-	} else if useObjectStore {
-		sdkAuth.RegisterTokenStore(objectStoreInst)
-	} else if useGitStore {
-		sdkAuth.RegisterTokenStore(gitStoreInst)
-	} else {
-		sdkAuth.RegisterTokenStore(sdkAuth.NewFileTokenStore())
-	}
+	// Register the required PostgreSQL token store for all authentication flows.
+	sdkAuth.RegisterTokenStore(pgStoreInst)
 
 	// Register built-in access providers before constructing services.
 	configaccess.Register(&cfg.SDKConfig)
 	pluginHost.ApplyConfig(context.Background(), cfg)
-	if configLoadedFromHome && homePluginStatusReady {
-		errHomePluginLoad := homeplugins.MarkLoadResults(&homePluginSyncReport, pluginHost)
-		errReportPlugins := home.ReportPluginStatus(context.Background(), homeClient, cfg.Home.NodeID, homePluginSyncReport)
-		if errHomePluginLoad != nil {
-			log.Errorf("failed to load home plugins: %v", errHomePluginLoad)
-		}
-		if errReportPlugins != nil {
-			log.Warnf("failed to report home plugin load status: %v", errReportPlugins)
-		}
-		if errHomePluginLoad != nil {
-			return
-		}
-	}
 	if pluginHost.HasTriggeredCommandLineFlags() {
 		if exitCode, handled := pluginHost.ExecuteCommandLine(context.Background(), os.Args[0], os.Args[1:], configFilePath, flag.CommandLine); handled {
 			if exitCode != 0 {
@@ -645,9 +338,62 @@ func main() {
 		if localModel {
 			log.Info("Local model mode: using embedded model catalogs, remote model updates disabled")
 		}
+		ctxUsageStats, cancelUsageStats := context.WithTimeout(context.Background(), 30*time.Second)
+		usageStatsStore, errUsageStats := usagestats.ConfigurePostgres(ctxUsageStats, pgStoreDSN, pgStoreSchema, cfg.UsageStatisticsEnabled)
+		cancelUsageStats()
+		if errUsageStats != nil {
+			log.Errorf("failed to initialize required postgres usage statistics store: %v", errUsageStats)
+			return
+		}
+		defer usagestats.CloseIf(usageStatsStore)
+		legacyUsagePaths := []string{
+			filepath.Join(wd, "usage-statistics.json"),
+			filepath.Join(filepath.Dir(configPath), "usage-statistics.json"),
+		}
+		legacyStoreBase := util.WritablePath()
+		if value, okLegacyPath := lookupEnv("PGSTORE_LOCAL_PATH", "pgstore_local_path"); okLegacyPath {
+			legacyStoreBase = value
+		}
+		if legacyStoreBase == "" {
+			legacyStoreBase = wd
+		}
+		legacyUsagePaths = append(legacyUsagePaths, filepath.Join(legacyStoreBase, "pgstore", "config", "usage-statistics.json"))
+		importLegacyUsageStatistics(usageStatsStore, legacyUsagePaths...)
+		serverOptions = append(serverOptions, api.WithUsageStatsStore(usageStatsStore))
 		misc.StartAntigravityVersionUpdater(context.Background())
 		startModelCatalogUpdaters(localModel, cfg.Home.Enabled)
 		cmd.StartServiceWithPluginHost(cfg, configFilePath, pluginHost, serverOptions...)
+	}
+}
+
+func importLegacyUsageStatistics(store *usagestats.Store, paths ...string) {
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "." || path == "" {
+			continue
+		}
+		if _, exists := seen[path]; exists {
+			continue
+		}
+		seen[path] = struct{}{}
+		data, errRead := os.ReadFile(path)
+		if errors.Is(errRead, os.ErrNotExist) {
+			continue
+		}
+		if errRead != nil {
+			log.WithError(errRead).Warnf("failed to read legacy usage statistics from %s", path)
+			continue
+		}
+		imported, errImport := store.ImportSnapshotIfEmpty(data)
+		if errImport != nil {
+			log.WithError(errImport).Warnf("failed to import legacy usage statistics from %s", path)
+			continue
+		}
+		if imported {
+			log.Infof("legacy usage statistics imported into PostgreSQL from %s", path)
+		}
+		return
 	}
 }
 

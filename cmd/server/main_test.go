@@ -1,10 +1,46 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 )
+
+func TestRequiredPostgresConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		values     map[string]string
+		wantDSN    string
+		wantSchema string
+		wantErr    bool
+	}{
+		{name: "missing DSN", values: map[string]string{}, wantErr: true},
+		{name: "uppercase variables", values: map[string]string{"PGSTORE_DSN": "postgres://db", "PGSTORE_SCHEMA": "cliproxy"}, wantDSN: "postgres://db", wantSchema: "cliproxy"},
+		{name: "lowercase compatibility", values: map[string]string{"pgstore_dsn": "postgres://lower", "pgstore_schema": "public"}, wantDSN: "postgres://lower", wantSchema: "public"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lookup := func(keys ...string) (string, bool) {
+				for _, key := range keys {
+					value := strings.TrimSpace(test.values[key])
+					if value != "" {
+						return value, true
+					}
+				}
+				return "", false
+			}
+			gotDSN, gotSchema, errConfig := requiredPostgresConfig(lookup)
+			if (errConfig != nil) != test.wantErr {
+				t.Fatalf("requiredPostgresConfig() error = %v, wantErr %t", errConfig, test.wantErr)
+			}
+			if gotDSN != test.wantDSN || gotSchema != test.wantSchema {
+				t.Fatalf("requiredPostgresConfig() = (%q, %q), want (%q, %q)", gotDSN, gotSchema, test.wantDSN, test.wantSchema)
+			}
+		})
+	}
+}
 
 func TestShouldEnableExampleAPIKeySafeMode(t *testing.T) {
 	cfgWithExampleKey := &config.Config{

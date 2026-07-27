@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -34,7 +33,7 @@ var (
 
 // Store persists bounded account and model aggregates and implements usage.Plugin.
 type Store struct {
-	path      string
+	storage   snapshotStorage
 	enabled   atomic.Bool
 	mu        sync.RWMutex
 	state     persistentState
@@ -45,20 +44,13 @@ type Store struct {
 	closeOnce sync.Once
 }
 
-// ResolveStoragePath places the aggregate file next to the active config file.
-func ResolveStoragePath(configFilePath string) string {
-	configFilePath = strings.TrimSpace(configFilePath)
-	if configFilePath == "" {
-		if workingDirectory, errWorkingDirectory := os.Getwd(); errWorkingDirectory == nil {
-			return filepath.Join(workingDirectory, storageFileName)
-		}
-		return storageFileName
-	}
-	return filepath.Join(filepath.Dir(configFilePath), storageFileName)
+type snapshotStorage interface {
+	Load(context.Context) ([]byte, error)
+	Save(context.Context, []byte) error
+	Close() error
 }
 
-// Configure replaces the process-wide built-in usage store.
-func Configure(path string, enabled bool) (*Store, error) {
+func configureStore(store *Store) {
 	configuredStoreMu.Lock()
 	defer configuredStoreMu.Unlock()
 
@@ -67,13 +59,8 @@ func Configure(path string, enabled bool) (*Store, error) {
 		configuredStore.Close()
 		configuredStore = nil
 	}
-	store, errStore := NewStore(path, enabled)
-	if errStore != nil {
-		return nil, errStore
-	}
 	coreusage.RegisterNamedPlugin(pluginName, store)
 	configuredStore = store
-	return store, nil
 }
 
 // CloseIf closes store when it is still the configured process-wide instance.
@@ -90,17 +77,26 @@ func CloseIf(store *Store) {
 	store.Close()
 }
 
-// NewStore loads an aggregate file and starts the asynchronous flush worker.
+// NewStore creates a file-backed store for isolated tests and migration tools.
+// The production server uses NewPostgresStore instead.
 func NewStore(path string, enabled bool) (*Store, error) {
+	return newStore(context.Background(), newFileSnapshotStorage(path), enabled)
+}
+
+func newStore(ctx context.Context, storage snapshotStorage, enabled bool) (*Store, error) {
+	if storage == nil {
+		return nil, fmt.Errorf("usage statistics: storage is required")
+	}
 	store := &Store{
-		path:  filepath.Clean(path),
-		state: newPersistentState(),
-		dirty: make(chan struct{}, 1),
-		stop:  make(chan struct{}),
-		done:  make(chan struct{}),
+		storage: storage,
+		state:   newPersistentState(),
+		dirty:   make(chan struct{}, 1),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 	store.enabled.Store(enabled)
-	if errLoad := store.load(); errLoad != nil {
+	if errLoad := store.load(ctx); errLoad != nil {
+		_ = storage.Close()
 		return nil, errLoad
 	}
 	if store.insertMissingBuiltinPrices(time.Now().UnixMilli()) {
@@ -110,6 +106,44 @@ func NewStore(path string, enabled bool) (*Store, error) {
 	}
 	go store.run()
 	return store, nil
+}
+
+// ImportSnapshotIfEmpty imports a legacy snapshot only when PostgreSQL has no collected usage
+// or manually configured model prices. Built-in prices alone do not block the migration.
+func (s *Store) ImportSnapshotIfEmpty(data []byte) (bool, error) {
+	if s == nil || len(data) == 0 {
+		return false, nil
+	}
+	state, errDecode := decodePersistentState(data)
+	if errDecode != nil {
+		return false, errDecode
+	}
+
+	s.mu.Lock()
+	if len(s.state.Aggregates) > 0 || hasNonBuiltinPrices(s.state.Prices) {
+		s.mu.Unlock()
+		return false, nil
+	}
+	previous := s.state
+	s.state = state
+	s.mu.Unlock()
+	s.insertMissingBuiltinPrices(time.Now().UnixMilli())
+	if errSave := s.saveSnapshot(); errSave != nil {
+		s.mu.Lock()
+		s.state = previous
+		s.mu.Unlock()
+		return false, errSave
+	}
+	return true, nil
+}
+
+func hasNonBuiltinPrices(prices map[string]ModelPrice) bool {
+	for _, price := range prices {
+		if price.Source != builtinPriceSource {
+			return true
+		}
+	}
+	return false
 }
 
 func newPersistentState() persistentState {
@@ -530,20 +564,29 @@ func normalizeModelKey(model string) string {
 	return strings.ToLower(strings.TrimSpace(model))
 }
 
-func (s *Store) load() error {
-	data, errRead := os.ReadFile(s.path)
-	if errors.Is(errRead, os.ErrNotExist) {
+func (s *Store) load(ctx context.Context) error {
+	data, errLoad := s.storage.Load(ctx)
+	if errLoad != nil {
+		return fmt.Errorf("load usage statistics: %w", errLoad)
+	}
+	if len(data) == 0 {
 		return nil
 	}
-	if errRead != nil {
-		return fmt.Errorf("read usage statistics: %w", errRead)
+	state, errDecode := decodePersistentState(data)
+	if errDecode != nil {
+		return errDecode
 	}
+	s.state = state
+	return nil
+}
+
+func decodePersistentState(data []byte) (persistentState, error) {
 	var state persistentState
 	if errUnmarshal := json.Unmarshal(data, &state); errUnmarshal != nil {
-		return fmt.Errorf("decode usage statistics: %w", errUnmarshal)
+		return persistentState{}, fmt.Errorf("decode usage statistics: %w", errUnmarshal)
 	}
 	if state.Version != storageVersion {
-		return fmt.Errorf("unsupported usage statistics version %d", state.Version)
+		return persistentState{}, fmt.Errorf("unsupported usage statistics version %d", state.Version)
 	}
 	if state.Prices == nil {
 		state.Prices = make(map[string]ModelPrice)
@@ -551,8 +594,7 @@ func (s *Store) load() error {
 	if state.Aggregates == nil {
 		state.Aggregates = make(map[string]Aggregate)
 	}
-	s.state = state
-	return nil
+	return state, nil
 }
 
 func (s *Store) run() {
@@ -573,10 +615,8 @@ func (s *Store) run() {
 				}
 			}
 		case <-s.stop:
-			if dirty {
-				if errSave := s.saveSnapshot(); errSave != nil {
-					log.WithError(errSave).Error("usage statistics: failed to persist aggregates during shutdown")
-				}
+			if errSave := s.saveSnapshot(); errSave != nil {
+				log.WithError(errSave).Error("usage statistics: failed to persist aggregates during shutdown")
 			}
 			return
 		}
@@ -602,42 +642,8 @@ func (s *Store) saveSnapshot() error {
 	if errMarshal != nil {
 		return fmt.Errorf("encode usage statistics: %w", errMarshal)
 	}
-	directory := filepath.Dir(s.path)
-	if errMkdir := os.MkdirAll(directory, 0o755); errMkdir != nil {
-		return fmt.Errorf("create usage statistics directory: %w", errMkdir)
-	}
-	temporary, errCreate := os.CreateTemp(directory, ".usage-statistics-*.tmp")
-	if errCreate != nil {
-		return fmt.Errorf("create usage statistics temporary file: %w", errCreate)
-	}
-	temporaryPath := temporary.Name()
-	cleanup := func() {
-		if errRemove := os.Remove(temporaryPath); errRemove != nil && !errors.Is(errRemove, os.ErrNotExist) {
-			log.WithError(errRemove).Debug("usage statistics: failed to remove temporary file")
-		}
-	}
-	if errChmod := temporary.Chmod(0o600); errChmod != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("secure usage statistics temporary file: %w", errChmod)
-	}
-	if _, errWrite := temporary.Write(data); errWrite != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("write usage statistics: %w", errWrite)
-	}
-	if errSync := temporary.Sync(); errSync != nil {
-		_ = temporary.Close()
-		cleanup()
-		return fmt.Errorf("sync usage statistics: %w", errSync)
-	}
-	if errClose := temporary.Close(); errClose != nil {
-		cleanup()
-		return fmt.Errorf("close usage statistics temporary file: %w", errClose)
-	}
-	if errRename := os.Rename(temporaryPath, s.path); errRename != nil {
-		cleanup()
-		return fmt.Errorf("replace usage statistics: %w", errRename)
+	if errSave := s.storage.Save(context.Background(), data); errSave != nil {
+		return fmt.Errorf("save usage statistics: %w", errSave)
 	}
 	return nil
 }
@@ -650,5 +656,8 @@ func (s *Store) Close() {
 	s.closeOnce.Do(func() {
 		close(s.stop)
 		<-s.done
+		if errClose := s.storage.Close(); errClose != nil {
+			log.WithError(errClose).Error("usage statistics: failed to close storage")
+		}
 	})
 }

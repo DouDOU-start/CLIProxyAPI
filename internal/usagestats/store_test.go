@@ -2,6 +2,7 @@ package usagestats
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,6 +46,12 @@ func TestStoreSeedsBuiltinCodexPrices(t *testing.T) {
 		if got.Source != builtinPriceSource || !got.CacheReadConfigured || !got.CacheWriteConfigured || got.UpdatedAtMS == 0 {
 			t.Fatalf("built-in metadata for %q = %#v", model, got)
 		}
+	}
+}
+
+func TestQuotePostgresIdentifier(t *testing.T) {
+	if got, want := quotePostgresIdentifier(`usage"stats`), `"usage""stats"`; got != want {
+		t.Fatalf("quotePostgresIdentifier() = %q, want %q", got, want)
 	}
 }
 
@@ -150,6 +157,42 @@ func TestStorePersistsAccountUsageWithoutRawAPIKey(t *testing.T) {
 	reopenedSummary := reopened.Summary()
 	if len(reopenedSummary.Accounts) != 1 || reopenedSummary.TotalTokens != 1_500_000 {
 		t.Fatalf("reopened summary = %#v", reopenedSummary)
+	}
+}
+
+func TestStoreImportsLegacySnapshotOnlyWhenEmpty(t *testing.T) {
+	legacyPath := filepath.Join(t.TempDir(), storageFileName)
+	legacy, errLegacy := NewStore(legacyPath, true)
+	if errLegacy != nil {
+		t.Fatalf("NewStore() legacy error = %v", errLegacy)
+	}
+	legacy.HandleUsage(context.Background(), coreusage.Record{
+		Provider:  "openai",
+		Model:     "gpt-5.4-mini",
+		AuthIndex: "legacy-account",
+		Detail:    coreusage.Detail{InputTokens: 100, TotalTokens: 100},
+	})
+	legacy.Close()
+	data, errRead := os.ReadFile(legacyPath)
+	if errRead != nil {
+		t.Fatalf("read legacy snapshot: %v", errRead)
+	}
+
+	target, errTarget := NewStore(filepath.Join(t.TempDir(), storageFileName), false)
+	if errTarget != nil {
+		t.Fatalf("NewStore() target error = %v", errTarget)
+	}
+	defer target.Close()
+	imported, errImport := target.ImportSnapshotIfEmpty(data)
+	if errImport != nil || !imported {
+		t.Fatalf("ImportSnapshotIfEmpty() = (%t, %v), want (true, nil)", imported, errImport)
+	}
+	if got := target.Summary().TotalTokens; got != 100 {
+		t.Fatalf("imported total tokens = %d, want 100", got)
+	}
+	imported, errImport = target.ImportSnapshotIfEmpty(data)
+	if errImport != nil || imported {
+		t.Fatalf("second ImportSnapshotIfEmpty() = (%t, %v), want (false, nil)", imported, errImport)
 	}
 }
 
