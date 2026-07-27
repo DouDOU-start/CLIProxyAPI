@@ -22,6 +22,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/redisqueue"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/usagestats"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v7/sdk/access"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executionregistry"
@@ -1116,6 +1117,36 @@ func TestManagementUsageRequiresManagementAuthAndPopsArray(t *testing.T) {
 
 	if remaining := redisqueue.PopOldest(1); len(remaining) != 0 {
 		t.Fatalf("remaining queue = %q, want empty", remaining)
+	}
+}
+
+func TestManagementUsageCostsRequiresManagementAuth(t *testing.T) {
+	configureManagementAuth(t)
+	server := newTestServer(t)
+	cookie, csrfToken := managementSessionForTest(t, server)
+
+	missingSessionReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-costs", nil)
+	missingSessionReq.RemoteAddr = "127.0.0.1:12345"
+	missingSessionRecorder := httptest.NewRecorder()
+	server.engine.ServeHTTP(missingSessionRecorder, missingSessionReq)
+	if missingSessionRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("missing session status = %d, want %d body=%s", missingSessionRecorder.Code, http.StatusUnauthorized, missingSessionRecorder.Body.String())
+	}
+
+	authenticatedReq := httptest.NewRequest(http.MethodGet, "/v0/management/usage-costs", nil)
+	addManagementSession(authenticatedReq, cookie, csrfToken)
+	authenticatedRecorder := httptest.NewRecorder()
+	server.engine.ServeHTTP(authenticatedRecorder, authenticatedReq)
+	if authenticatedRecorder.Code != http.StatusOK {
+		t.Fatalf("authenticated status = %d, want %d body=%s", authenticatedRecorder.Code, http.StatusOK, authenticatedRecorder.Body.String())
+	}
+
+	var summary usagestats.Summary
+	if errUnmarshal := json.Unmarshal(authenticatedRecorder.Body.Bytes(), &summary); errUnmarshal != nil {
+		t.Fatalf("unmarshal usage cost response: %v", errUnmarshal)
+	}
+	if summary.Enabled || summary.Accounts == nil || summary.Models == nil {
+		t.Fatalf("unexpected empty usage cost summary: %#v", summary)
 	}
 }
 

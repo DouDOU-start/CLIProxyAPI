@@ -49,6 +49,7 @@ import { useAuthFilesModels } from '@/features/authFiles/hooks/useAuthFilesModel
 import { useAuthFilesOauth } from '@/features/authFiles/hooks/useAuthFilesOauth';
 import { useAuthFilesPrefixProxyEditor } from '@/features/authFiles/hooks/useAuthFilesPrefixProxyEditor';
 import { useAuthFilesStatusBarCache } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
+import { useAuthFilesUsageCosts } from '@/features/authFiles/hooks/useAuthFilesUsageCosts';
 import {
   isAuthFilesStatusFilterMode,
   isAuthFilesSortMode,
@@ -60,6 +61,7 @@ import {
   type AuthFilesSortMode,
 } from '@/features/authFiles/uiState';
 import { useAuthStore, useNotificationStore, useThemeStore } from '@/stores';
+import { normalizeRecentRequestAuthIndex } from '@/utils/recentRequests';
 import styles from './AuthFilesPage.module.scss';
 
 const easePower3Out = (progress: number) => 1 - (1 - progress) ** 4;
@@ -148,6 +150,7 @@ export function AuthFilesPage() {
   } = useAuthFilesData();
 
   const statusBarCache = useAuthFilesStatusBarCache(files);
+  const { usageByAuthIndex, status: usageCostsStatus, loadUsageCosts } = useAuthFilesUsageCosts();
 
   const {
     excluded,
@@ -349,8 +352,8 @@ export function AuthFilesPage() {
   }, []);
 
   const handleHeaderRefresh = useCallback(async () => {
-    await Promise.all([loadFiles(), loadExcluded(), loadModelAlias()]);
-  }, [loadFiles, loadExcluded, loadModelAlias]);
+    await Promise.all([loadFiles(), loadExcluded(), loadModelAlias(), loadUsageCosts()]);
+  }, [loadFiles, loadExcluded, loadModelAlias, loadUsageCosts]);
 
   useHeaderRefresh(handleHeaderRefresh);
 
@@ -359,11 +362,12 @@ export function AuthFilesPage() {
     loadFiles();
     loadExcluded();
     loadModelAlias();
-  }, [isCurrentLayer, loadFiles, loadExcluded, loadModelAlias]);
+    loadUsageCosts();
+  }, [isCurrentLayer, loadFiles, loadExcluded, loadModelAlias, loadUsageCosts]);
 
   useInterval(
     () => {
-      void loadFiles().catch(() => {});
+      void Promise.all([loadFiles(), loadUsageCosts()]).catch(() => {});
     },
     isCurrentLayer ? 240_000 : null
   );
@@ -526,6 +530,10 @@ export function AuthFilesPage() {
     },
     [filter, navigate]
   );
+
+  const openUsageCosts = useCallback(() => {
+    navigate('/usage-costs');
+  }, [navigate]);
 
   useActionBarHeightVar(
     floatingBatchActionsRef,
@@ -815,25 +823,35 @@ export function AuthFilesPage() {
               <div
                 className={`${styles.fileGrid} ${styles.fileGridQuotaManaged} ${compactMode ? styles.fileGridCompact : ''}`}
               >
-                {pageItems.map((file) => (
-                  <AuthFileCard
-                    key={file.name}
-                    file={file}
-                    compact={compactMode}
-                    selected={selectedFiles.has(file.name)}
-                    resolvedTheme={resolvedTheme}
-                    disableControls={disableControls}
-                    deleting={deleting}
-                    statusUpdating={statusUpdating}
-                    statusBarCache={statusBarCache}
-                    onShowModels={showModels}
-                    onDownload={handleDownload}
-                    onOpenPrefixProxyEditor={openPrefixProxyEditor}
-                    onDelete={handleDelete}
-                    onToggleStatus={handleStatusToggle}
-                    onToggleSelect={toggleSelect}
-                  />
-                ))}
+                {pageItems.map((file) => {
+                  const authIndex = normalizeRecentRequestAuthIndex(
+                    file['auth_index'] ?? file.authIndex
+                  );
+                  const usage = authIndex ? usageByAuthIndex.get(authIndex) : undefined;
+
+                  return (
+                    <AuthFileCard
+                      key={file.name}
+                      file={file}
+                      compact={compactMode}
+                      selected={selectedFiles.has(file.name)}
+                      resolvedTheme={resolvedTheme}
+                      disableControls={disableControls}
+                      deleting={deleting}
+                      statusUpdating={statusUpdating}
+                      statusBarCache={statusBarCache}
+                      usage={usage}
+                      usageCostsStatus={usageCostsStatus}
+                      onShowModels={showModels}
+                      onDownload={handleDownload}
+                      onOpenPrefixProxyEditor={openPrefixProxyEditor}
+                      onDelete={handleDelete}
+                      onToggleStatus={handleStatusToggle}
+                      onToggleSelect={toggleSelect}
+                      onOpenUsageCosts={openUsageCosts}
+                    />
+                  );
+                })}
               </div>
             )}
 

@@ -14,6 +14,7 @@ temp/*
 refs/*
 plugins/*
 examples/plugin/bin/*
+usage-statistics.json
 
 # Storage backends
 pgstore/*

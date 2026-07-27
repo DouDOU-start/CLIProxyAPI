@@ -23,6 +23,7 @@ import {
   IconSidebarPlugins,
   IconSidebarStore,
   IconSidebarSystem,
+  IconDollarSign,
   IconChevronDown,
 } from '@/components/ui/icons';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
@@ -53,6 +54,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   config: <IconSidebarConfig size={18} />,
   logs: <IconSidebarLogs size={18} />,
   system: <IconSidebarSystem size={18} />,
+  usageCosts: <IconDollarSign size={18} />,
 };
 
 interface SidebarNavLinkItem {
@@ -540,6 +542,12 @@ export function MainLayout() {
       id: 'observe',
       labelKey: 'nav_groups.observe',
       items: [
+        {
+          path: '/usage-costs',
+          labelKey: 'nav.usage_costs',
+          metaKey: 'nav_meta.usage_costs',
+          icon: sidebarIcons.usageCosts,
+        },
         {
           path: '/logs',
           labelKey: 'nav.logs',

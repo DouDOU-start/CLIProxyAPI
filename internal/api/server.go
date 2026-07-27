@@ -35,6 +35,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/safemode"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/usagestats"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/util"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v7/sdk/access"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/api/handlers"
@@ -231,7 +232,8 @@ type Server struct {
 	wsAuthEnabled atomic.Bool
 
 	// management handler
-	mgmt *managementHandlers.Handler
+	mgmt            *managementHandlers.Handler
+	usageStatsStore *usagestats.Store
 
 	// pluginHost owns dynamic plugin Management API route dispatch.
 	pluginHost *pluginhost.Host
@@ -342,6 +344,16 @@ func NewServer(cfg *config.Config, authManager *auth.Manager, accessManager *sdk
 	applySignatureCacheConfig(nil, cfg)
 	// Initialize management handler
 	s.mgmt = managementHandlers.NewHandler(cfg, configFilePath, authManager)
+	if cfg != nil {
+		usageStatsEnabled := !cfg.Home.Enabled && cfg.UsageStatisticsEnabled
+		usageStatsStore, errUsageStats := usagestats.Configure(usagestats.ResolveStoragePath(configFilePath), usageStatsEnabled)
+		if errUsageStats != nil {
+			log.WithError(errUsageStats).Warn("failed to initialize account cost statistics")
+		} else {
+			s.usageStatsStore = usageStatsStore
+			s.mgmt.SetUsageStatsStore(usageStatsStore)
+		}
+	}
 	s.mgmt.SetPluginHost(optionState.pluginHost)
 	s.mgmt.SetConfigReloadHook(optionState.configReloadHook)
 	logDir := logging.ResolveLogDirectory(cfg)
@@ -956,6 +968,11 @@ func (s *Server) registerManagementRoutes() {
 		mgmt.DELETE("/api-keys", s.mgmt.DeleteAPIKeys)
 		mgmt.GET("/api-key-usage", s.mgmt.GetAPIKeyUsage)
 		mgmt.GET("/usage-queue", s.mgmt.GetUsageQueue)
+		mgmt.GET("/usage-costs", s.mgmt.GetUsageCosts)
+		mgmt.DELETE("/usage-costs", s.mgmt.DeleteUsageCosts)
+		mgmt.GET("/model-prices", s.mgmt.GetModelPrices)
+		mgmt.PUT("/model-prices", s.mgmt.PutModelPrice)
+		mgmt.DELETE("/model-prices", s.mgmt.DeleteModelPrice)
 
 		mgmt.GET("/gemini-api-key", s.mgmt.GetGeminiKeys)
 		mgmt.PUT("/gemini-api-key", s.mgmt.PutGeminiKeys)
@@ -1823,8 +1840,10 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 
 	// Shutdown the HTTP server.
-	if err := s.server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown HTTP server: %v", err)
+	errShutdown := s.server.Shutdown(ctx)
+	usagestats.CloseIf(s.usageStatsStore)
+	if errShutdown != nil {
+		return fmt.Errorf("failed to shutdown HTTP server: %v", errShutdown)
 	}
 
 	log.Debug("API server stopped")

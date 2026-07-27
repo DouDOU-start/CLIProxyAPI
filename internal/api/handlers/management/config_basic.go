@@ -190,7 +190,12 @@ func (h *Handler) GetUsageStatisticsEnabled(c *gin.Context) {
 	c.JSON(200, gin.H{"usage-statistics-enabled": h.cfg.UsageStatisticsEnabled})
 }
 func (h *Handler) PutUsageStatisticsEnabled(c *gin.Context) {
-	h.updateBoolField(c, func(v bool) { h.cfg.UsageStatisticsEnabled = v })
+	h.updateBoolField(c, func(v bool) {
+		h.cfg.UsageStatisticsEnabled = v
+		if store := h.usageStore(); store != nil {
+			store.SetEnabled(v)
+		}
+	})
 }
 
 // UsageStatisticsEnabled

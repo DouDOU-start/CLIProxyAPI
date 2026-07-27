@@ -86,7 +86,7 @@
   margin-bottom: $spacing-md;
 }
 
-// 筛选区域
+// Filters
 .filterSection {
   display: flex;
   flex-direction: column;
@@ -259,7 +259,7 @@
   gap: 12px;
   align-items: stretch;
 
-  // 修复 Input 组件在 filterItem 中的嵌套样式
+  // Keep nested Input styles aligned with the filter controls.
   :global(.form-group) {
     margin: 0;
   }
@@ -400,7 +400,7 @@
   }
 }
 
-// 卡片网格
+// Card grid
 .fileGrid {
   display: grid;
   gap: $spacing-md;
@@ -443,7 +443,7 @@
   }
 }
 
-// 卡片渐变背景 — subtle tint only
+// Subtle card background tint
 .antigravityCard {
   background-image: linear-gradient(180deg, rgba(224, 247, 250, 0.06), transparent);
 }
@@ -940,7 +940,7 @@
   }
 }
 
-// 单个认证文件卡片
+// Auth file card
 .fileCard {
   position: relative;
   overflow: hidden;
@@ -1454,6 +1454,101 @@
   font-size: 12px;
 }
 
+.usageSummary {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  padding: 7px 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bg-secondary) 52%, transparent);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color $transition-fast,
+    border-color $transition-fast;
+
+  &:hover {
+    background: color-mix(in srgb, var(--primary-color) 7%, var(--bg-secondary));
+    border-color: color-mix(in srgb, var(--primary-color) 24%, var(--border-color));
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 62%, transparent);
+    outline-offset: 2px;
+  }
+}
+
+.usageSummaryCompact {
+  display: flex;
+  padding: 5px 8px;
+
+  .usageMetric {
+    width: 100%;
+    padding: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+}
+
+.usageMetric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 10px;
+
+  & + & {
+    border-left: 1px solid color-mix(in srgb, var(--border-color) 58%, transparent);
+  }
+}
+
+.usageMetricLabel {
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usageMetricValueRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.usageMetricValue {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usageUnpricedWarning {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--warning-text);
+}
+
 .statPill {
   display: inline-flex;
   align-items: baseline;
@@ -1538,7 +1633,7 @@
   letter-spacing: 0.03em;
 }
 
-// 状态监测栏
+// Status monitor
 .statusBar {
   display: flex;
   align-items: center;
@@ -1918,7 +2013,7 @@
   }
 }
 
-// 分页
+// Pagination
 .pagination {
   display: flex;
   justify-content: center;
@@ -2002,7 +2097,7 @@
   border-radius: $radius-md;
 }
 
-// OAuth 模型禁用
+// OAuth model exclusions
 .excludedList {
   display: flex;
   flex-direction: column;
@@ -2050,7 +2145,7 @@
   flex-shrink: 0;
 }
 
-// OAuth 模型禁用表单：提供商快捷标签
+// Provider shortcuts for the OAuth model exclusion form
 .providerField {
   display: flex;
   flex-direction: column;
@@ -2104,7 +2199,7 @@
   }
 }
 
-// OAuth 模型别名 - 映射概览
+// OAuth model alias mapping overview
 .aliasChartSection {
   margin-bottom: $spacing-lg;
   padding-bottom: $spacing-lg;
@@ -2172,7 +2267,7 @@
   }
 }
 
-// OAuth 模型映射表单
+// OAuth model mapping form
 .mappingRow {
   display: grid;
   grid-template-columns: 1fr auto 1fr auto auto;
@@ -2198,7 +2293,7 @@
   align-items: center;
 }
 
-// 详情弹窗
+// Details modal
 .detailContent {
   max-height: 400px;
   overflow: auto;
@@ -2217,7 +2312,7 @@
   margin: 0;
 }
 
-// 表单
+// Form
 .formGroup {
   display: flex;
   flex-direction: column;
@@ -2260,7 +2355,7 @@
   padding: $spacing-lg;
 }
 
-// 模型列表弹窗
+// Model list modal
 .modelsList {
   display: flex;
   flex-direction: column;
@@ -2338,7 +2433,7 @@
   flex-shrink: 0;
 }
 
-// 排除模型勾选列表
+// Excluded model checklist
 .excludedCheckList {
   display: flex;
   flex-direction: column;

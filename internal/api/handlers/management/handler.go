@@ -17,6 +17,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginhost"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/pluginstore"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/usagestats"
 	sdkAuth "github.com/router-for-me/CLIProxyAPI/v7/sdk/auth"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
@@ -59,6 +60,7 @@ type Handler struct {
 	pluginStoreHTTPClient   pluginstore.HTTPDoer
 	pluginReleaseCacheMu    sync.Mutex
 	pluginReleaseCache      map[string]pluginReleaseCacheEntry
+	usageStatsStore         *usagestats.Store
 }
 
 type configReloadSnapshot struct {
@@ -128,6 +130,20 @@ func (h *Handler) SetConfig(cfg *config.Config) {
 	}
 	h.mu.Lock()
 	h.cfg = cfg
+	usageStatsStore := h.usageStatsStore
+	h.mu.Unlock()
+	if usageStatsStore != nil {
+		usageStatsStore.SetEnabled(cfg != nil && !cfg.Home.Enabled && cfg.UsageStatisticsEnabled)
+	}
+}
+
+// SetUsageStatsStore exposes the built-in account cost store to Management API handlers.
+func (h *Handler) SetUsageStatsStore(store *usagestats.Store) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	h.usageStatsStore = store
 	h.mu.Unlock()
 }
 

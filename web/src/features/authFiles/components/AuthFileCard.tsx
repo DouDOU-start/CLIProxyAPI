@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SelectionCheckbox } from '@/components/ui/SelectionCheckbox';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
+  IconAlertTriangle,
   IconDownload,
   IconInfo,
   IconModelCluster,
@@ -11,7 +12,7 @@ import {
   IconTrash2,
 } from '@/components/ui/icons';
 import { ProviderStatusBar } from '@/components/providers/ProviderStatusBar';
-import type { AuthFileItem } from '@/types';
+import type { AccountUsageSummary, AuthFileItem } from '@/types';
 import {
   normalizeRecentRequestAuthIndex,
   normalizeRecentRequestBuckets,
@@ -33,6 +34,11 @@ import {
 import { resolveAuthFileQuotaType } from '@/features/authFiles/quotaVisibility';
 import type { AuthFileStatusBarData } from '@/features/authFiles/hooks/useAuthFilesStatusBarCache';
 import { AuthFileQuotaSection } from '@/features/authFiles/components/AuthFileQuotaSection';
+import {
+  resolveAuthFileUsageMetrics,
+  type AuthFilesUsageCostsStatus,
+} from '@/features/authFiles/usageCosts';
+import { formatUsageCost, formatUsageNumber, formatUsageTokens } from '@/utils/usageCosts';
 import styles from '@/pages/AuthFilesPage.module.scss';
 
 const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'available']);
@@ -46,12 +52,15 @@ export type AuthFileCardProps = {
   deleting: string | null;
   statusUpdating: Record<string, boolean>;
   statusBarCache: Map<string, AuthFileStatusBarData>;
+  usage?: AccountUsageSummary;
+  usageCostsStatus: AuthFilesUsageCostsStatus;
   onShowModels: (file: AuthFileItem) => void;
   onDownload: (name: string) => void;
   onOpenPrefixProxyEditor: (file: AuthFileItem) => void;
   onDelete: (name: string) => void;
   onToggleStatus: (file: AuthFileItem, enabled: boolean) => void;
   onToggleSelect: (name: string) => void;
+  onOpenUsageCosts: () => void;
 };
 
 export function AuthFileCard(props: AuthFileCardProps) {
@@ -65,12 +74,15 @@ export function AuthFileCard(props: AuthFileCardProps) {
     deleting,
     statusUpdating,
     statusBarCache,
+    usage,
+    usageCostsStatus,
     onShowModels,
     onDownload,
     onOpenPrefixProxyEditor,
     onDelete,
     onToggleStatus,
     onToggleSelect,
+    onOpenUsageCosts,
   } = props;
 
   const recentBuckets = normalizeRecentRequestBuckets(file.recent_requests ?? file.recentRequests);
@@ -79,6 +91,7 @@ export function AuthFileCard(props: AuthFileCardProps) {
     failure: normalizeUsageTotal(file.failed),
   };
   const isRuntimeOnly = isRuntimeOnlyAuthFile(file);
+  const usageMetrics = isRuntimeOnly ? null : resolveAuthFileUsageMetrics(usageCostsStatus, usage);
   const providerKey = normalizeProviderKey(String(file.type ?? file.provider ?? 'unknown'));
   const isAistudio = providerKey === 'aistudio';
   const showModelsButton = !isRuntimeOnly || isAistudio;
@@ -230,6 +243,64 @@ export function AuthFileCard(props: AuthFileCardProps) {
                 <span className={styles.statValue}>{fileStats.failure}</span>
               </div>
             </div>
+
+            {usageMetrics && (
+              <button
+                type="button"
+                className={`${styles.usageSummary} ${compact ? styles.usageSummaryCompact : ''}`}
+                onClick={onOpenUsageCosts}
+                title={t('auth_files.usage_details')}
+                aria-label={t('auth_files.usage_details')}
+              >
+                <span className={styles.usageMetric}>
+                  <span className={styles.usageMetricLabel}>{t('auth_files.usage_cost')}</span>
+                  <span className={styles.usageMetricValueRow}>
+                    <strong
+                      className={styles.usageMetricValue}
+                      title={formatUsageCost(usageMetrics.costMicros)}
+                    >
+                      {formatUsageCost(usageMetrics.costMicros)}
+                    </strong>
+                    {usageMetrics.unpricedCalls > 0 && (
+                      <span
+                        className={styles.usageUnpricedWarning}
+                        title={t('auth_files.usage_unpriced_hint', {
+                          count: usageMetrics.unpricedCalls,
+                        })}
+                        aria-label={t('auth_files.usage_unpriced_hint', {
+                          count: usageMetrics.unpricedCalls,
+                        })}
+                      >
+                        <IconAlertTriangle size={13} />
+                      </span>
+                    )}
+                  </span>
+                </span>
+                {!compact && (
+                  <>
+                    <span className={styles.usageMetric}>
+                      <span className={styles.usageMetricLabel}>
+                        {t('auth_files.usage_tokens')}
+                      </span>
+                      <strong
+                        className={styles.usageMetricValue}
+                        title={formatUsageNumber(usageMetrics.totalTokens)}
+                      >
+                        {formatUsageTokens(usageMetrics.totalTokens)}
+                      </strong>
+                    </span>
+                    <span className={styles.usageMetric}>
+                      <span className={styles.usageMetricLabel}>
+                        {t('auth_files.usage_requests')}
+                      </span>
+                      <strong className={styles.usageMetricValue}>
+                        {formatUsageNumber(usageMetrics.calls)}
+                      </strong>
+                    </span>
+                  </>
+                )}
+              </button>
+            )}
 
             <div className={`${styles.statusPanel} ${compact ? styles.statusPanelCompact : ''}`}>
               <div className={styles.statusPanelLabel}>

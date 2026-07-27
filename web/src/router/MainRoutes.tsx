@@ -10,6 +10,7 @@ import { PluginStorePage } from '@/features/plugins/PluginStorePage';
 import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
+import { UsageCostsPage } from '@/pages/UsageCostsPage';
 import { useAuthStore } from '@/stores';
 
 const createMainRoutes = (supportsPlugin: boolean) => [
@@ -35,6 +36,7 @@ const createMainRoutes = (supportsPlugin: boolean) => [
       ]),
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
+  { path: '/usage-costs', element: <UsageCostsPage /> },
   { path: '/system', element: <SystemPage /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ];
