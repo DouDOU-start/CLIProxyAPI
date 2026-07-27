@@ -136,7 +136,7 @@ cp config.example.yaml config.yaml
 ./docker-build.sh
 ```
 
-Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `cli-proxy-postgres-data` named volume. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only port `8317` is published to the host; PostgreSQL and OAuth callback ports remain internal.
+Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `data` directory at the project root. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only port `8317` is published to the host; PostgreSQL and OAuth callback ports remain internal.
 
 `postgresql.schema` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically and inserts a minimal system configuration into `config_store`.
 

@@ -8,7 +8,7 @@ services:
     volumes:
       - ${CLI_PROXY_CONFIG_PATH:-./config.yaml}:/bootstrap/config.yaml:ro
       - ./docker-postgres-entrypoint.sh:/bootstrap/docker-postgres-entrypoint.sh:ro
-      - cli-proxy-postgres-data:/var/lib/postgresql/data
+      - ./data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "/bin/bash", "/bootstrap/docker-postgres-entrypoint.sh", "healthcheck"]
       interval: 5s
@@ -40,6 +40,3 @@ services:
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs
       - ${CLI_PROXY_PLUGIN_PATH:-./plugins}:/CLIProxyAPI/plugins
     restart: unless-stopped
-
-volumes:
-  cli-proxy-postgres-data:

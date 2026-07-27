@@ -17,6 +17,7 @@ LICENSE
 
 # Runtime data folders (should be mounted as volumes)
 auths
+data
 logs
 conv
 config.yaml

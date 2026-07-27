@@ -136,7 +136,7 @@ cp config.example.yaml config.yaml
 ./docker-build.sh
 ```
 
-Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在 `cli-proxy-postgres-data` 命名卷中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放 `8317`，PostgreSQL 和 OAuth 回调端口均不对外映射。
+Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在项目根目录的 `data` 目录中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放 `8317`，PostgreSQL 和 OAuth 回调端口均不对外映射。
 
 `postgresql.schema` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表，并向 `config_store` 写入最小系统配置。
 

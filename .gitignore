@@ -16,6 +16,7 @@ examples/plugin/bin/*
 usage-statistics.json
 
 # Storage backends
+data/*
 pgstore/*
 gitstore/*
 objectstore/*
