@@ -131,12 +131,14 @@ Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://
 项目现在强制依赖 PostgreSQL。本地 `config.yaml` 只保存数据库连接；服务设置、认证账号、模型价格和累计用量统计全部持久化到 PostgreSQL，并通过管理中心维护。为了兼容现有文件监听机制，进程运行期间会创建临时镜像目录，并在退出时自动删除。
 
 ```bash
-cp config.example.yaml config.yaml
-# 修改 postgresql.dsn 中的密码，然后同时启动两个容器：
-./docker-build.sh
+./deploy.sh
 ```
 
-Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在项目根目录的 `data` 目录中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放 `8317`，PostgreSQL 和 OAuth 回调端口均不对外映射。
+首次执行时，部署脚本会自动创建 `config.yaml`、生成 PostgreSQL 随机密码、准备 `data`、`logs` 和 `plugins` 目录，然后构建当前源码并启动两个容器。脚本不会覆盖已有的有效配置和数据；如果配置中仍是示例密码，则会自动替换为随机密码。后续升级只需执行 `git pull`，再重新运行 `./deploy.sh`。
+
+如果需要自定义数据库账号、服务端口或插件目录，可以先复制并修改 `config.example.yaml`。部署脚本会保留已有配置，并自动让 Docker Compose 使用其中配置的端口。
+
+Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在项目根目录的 `data` 目录中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放配置的服务端口（默认 `8317`），PostgreSQL 和 OAuth 回调端口均不对外映射。
 
 `postgresql.schema` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表，并向 `config_store` 写入最小系统配置。
 

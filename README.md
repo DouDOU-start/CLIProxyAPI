@@ -131,12 +131,14 @@ The web management console is built into the Go binary and opens at `http://loca
 PostgreSQL is required. The local `config.yaml` contains only the database connection. Server settings, authentication accounts, model prices, and cumulative usage statistics are persisted in PostgreSQL and managed through the management console. The server creates a temporary runtime mirror for file-watcher compatibility and removes it on exit.
 
 ```bash
-cp config.example.yaml config.yaml
-# Change the password in postgresql.dsn, then start both containers:
-./docker-build.sh
+./deploy.sh
 ```
 
-Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `data` directory at the project root. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only port `8317` is published to the host; PostgreSQL and OAuth callback ports remain internal.
+On the first run, the deployment script creates `config.yaml`, generates a random PostgreSQL password, prepares the `data`, `logs`, and `plugins` directories, builds the current source, and starts both containers. Existing valid configuration and data are not overwritten. If the example password is still present, it is replaced with a random password. For later upgrades, run `git pull` and then execute `./deploy.sh` again.
+
+To customize the database account, service port, or plugin directory, copy and edit `config.example.yaml` before deploying. The deployment script preserves the existing configuration and makes Docker Compose use its configured port automatically.
+
+Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `data` directory at the project root. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only the configured service port (`8317` by default) is published to the host; PostgreSQL and OAuth callback ports remain internal.
 
 `postgresql.schema` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically and inserts a minimal system configuration into `config_store`.
 
