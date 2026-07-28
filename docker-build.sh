@@ -35,4 +35,8 @@ echo "Starting the application and PostgreSQL containers..."
 docker compose up -d --remove-orphans --pull never
 
 echo "Build complete. Services are running."
-echo "Run 'docker compose logs -f' to see the logs."
+if [[ -n "${COMPOSE_PROJECT_NAME:-}" ]]; then
+  echo "Run 'docker compose -p ${COMPOSE_PROJECT_NAME} logs -f' to see the logs."
+else
+  echo "Run 'docker compose logs -f' to see the logs."
+fi

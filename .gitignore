@@ -17,6 +17,7 @@ usage-statistics.json
 
 # Storage backends
 data/*
+/instances/
 pgstore/*
 gitstore/*
 objectstore/*

@@ -134,11 +134,29 @@ PostgreSQL is required. The local `config.yaml` contains only the database conne
 ./deploy.sh
 ```
 
-On the first run, the deployment script creates `config.yaml`, generates a random PostgreSQL password, prepares the `data`, `logs`, and `plugins` directories, builds the current source, and starts both containers. Existing valid configuration and data are not overwritten. If the example password is still present, it is replaced with a random password. For later upgrades, run `git pull` and then execute `./deploy.sh` again.
+When run directly in a terminal, the script lists the default instance and every existing named instance together with their ports. Select an existing entry to update it without re-entering its name or port. Only the "create a new named instance" option asks for new values and checks whether the name or port is already in use. Deployment starts after confirmation.
 
-To customize the database account, service port, or plugin directory, copy and edit `config.example.yaml` before deploying. The deployment script preserves the existing configuration and makes Docker Compose use its configured port automatically.
+On the first run, the deployment script creates the matching `config.yaml`, generates a random PostgreSQL password, prepares the `data`, `logs`, and `plugins` directories, builds the current source, and starts both containers. Existing valid configuration and data are not overwritten. If the example password is still present, it is replaced with a random password. For later upgrades, run `git pull` and then execute `./deploy.sh` again.
 
-Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. PostgreSQL data is retained in the `data` directory at the project root. The PostgreSQL container reads its user, password, and database directly from `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only the configured service port (`8317` by default) is published to the host; PostgreSQL and OAuth callback ports remain internal.
+To deploy multiple isolated instances on the same server, run `./deploy.sh` and select from the menu, or pass a unique name and port directly for automated deployments:
+
+```bash
+./deploy.sh team-a 8317
+./deploy.sh team-b 8318
+```
+
+Each instance gets its own Compose project, API container, PostgreSQL container, and `instances/<name>/config.yaml`, `data`, `logs`, and `plugins` directories. Instances do not share databases, configuration, authentication files, or usage statistics. Run the same command again to update that instance.
+
+For example, to inspect or stop `team-a`:
+
+```bash
+docker compose -p cli-proxy-team-a logs -f --tail=200
+docker compose -p cli-proxy-team-a down
+```
+
+To customize the database account or plugin directory, edit the root `config.yaml` for the default instance or `instances/<name>/config.yaml` for a named instance. The deployment script preserves existing configuration. The command-line port is written to the matching configuration and used by Docker Compose automatically.
+
+Docker Compose starts PostgreSQL and CLIProxyAPI as separate containers. The default instance keeps PostgreSQL data in the project-root `data` directory, while named instances use `instances/<name>/data`. PostgreSQL reads its user, password, and database from the matching `config.yaml`; no `.env` file is required. Keep the hostname as `postgres` when running through Compose. Only each instance's configured service port is published to the host; PostgreSQL and OAuth callback ports remain internal.
 
 `postgresql.schema` is optional and defaults to the connection's default schema. On first startup, the server creates `config_store`, `auth_store`, and `usage_statistics` automatically and inserts a minimal system configuration into `config_store`.
 

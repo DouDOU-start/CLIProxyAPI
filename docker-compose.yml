@@ -1,14 +1,14 @@
 services:
   postgres:
     image: postgres:16
-    container_name: cli-proxy-postgres
+    container_name: ${CLI_PROXY_POSTGRES_CONTAINER:-cli-proxy-postgres}
     entrypoint:
       - /bin/bash
       - /bootstrap/docker-postgres-entrypoint.sh
     volumes:
       - ${CLI_PROXY_CONFIG_PATH:-./config.yaml}:/bootstrap/config.yaml:ro
       - ./docker-postgres-entrypoint.sh:/bootstrap/docker-postgres-entrypoint.sh:ro
-      - ./data:/var/lib/postgresql/data
+      - ${CLI_PROXY_DATA_PATH:-./data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "/bin/bash", "/bootstrap/docker-postgres-entrypoint.sh", "healthcheck"]
       interval: 5s
@@ -27,7 +27,7 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-none}
         BUILD_DATE: ${BUILD_DATE:-unknown}
-    container_name: cli-proxy-api
+    container_name: ${CLI_PROXY_API_CONTAINER:-cli-proxy-api}
     depends_on:
       postgres:
         condition: service_healthy

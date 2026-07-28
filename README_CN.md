@@ -134,11 +134,29 @@ Web 管理页源码已集成到 Go 二进制中，启动后直接访问 `http://
 ./deploy.sh
 ```
 
-首次执行时，部署脚本会自动创建 `config.yaml`、生成 PostgreSQL 随机密码、准备 `data`、`logs` 和 `plugins` 目录，然后构建当前源码并启动两个容器。脚本不会覆盖已有的有效配置和数据；如果配置中仍是示例密码，则会自动替换为随机密码。后续升级只需执行 `git pull`，再重新运行 `./deploy.sh`。
+在终端中直接运行时，脚本会自动列出默认实例和所有已有命名实例，并显示各自端口。更新时直接从列表选择，不需要重新输入实例名和端口；只有选择“创建新的命名实例”时才会要求输入，并会检查名称和端口是否已被占用。确认后脚本才会开始部署。
 
-如果需要自定义数据库账号、服务端口或插件目录，可以先复制并修改 `config.example.yaml`。部署脚本会保留已有配置，并自动让 Docker Compose 使用其中配置的端口。
+首次执行时，部署脚本会自动创建对应的 `config.yaml`、生成 PostgreSQL 随机密码、准备 `data`、`logs` 和 `plugins` 目录，然后构建当前源码并启动两个容器。脚本不会覆盖已有的有效配置和数据；如果配置中仍是示例密码，则会自动替换为随机密码。后续升级只需执行 `git pull`，再重新运行 `./deploy.sh`。
 
-Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。PostgreSQL 数据保存在项目根目录的 `data` 目录中。PostgreSQL 容器会直接从 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放配置的服务端口（默认 `8317`），PostgreSQL 和 OAuth 回调端口均不对外映射。
+同一台服务器部署多套独立实例时，可以直接运行 `./deploy.sh` 并从菜单选择，也可以为自动化部署直接传入唯一的实例名和端口：
+
+```bash
+./deploy.sh team-a 8317
+./deploy.sh team-b 8318
+```
+
+每个实例都有独立的 Compose 项目、API 容器、PostgreSQL 容器以及 `instances/<实例名>/config.yaml`、`data`、`logs`、`plugins` 目录。实例之间不会共享数据库、配置、认证文件或用量统计。重复执行相同命令即可更新对应实例。
+
+例如查看或停止 `team-a`：
+
+```bash
+docker compose -p cli-proxy-team-a logs -f --tail=200
+docker compose -p cli-proxy-team-a down
+```
+
+如果需要自定义数据库账号或插件目录，默认实例可以先复制并修改根目录的 `config.yaml`；命名实例则使用 `instances/<实例名>/config.yaml`。部署脚本会保留已有配置；命令行中的端口会写入对应配置，并由 Docker Compose 自动使用。
+
+Docker Compose 会分别启动 PostgreSQL 和 CLIProxyAPI 两个容器。默认实例的 PostgreSQL 数据保存在项目根目录的 `data` 中，命名实例保存在 `instances/<实例名>/data` 中。PostgreSQL 容器会直接从对应的 `config.yaml` 读取用户、密码和数据库，不需要 `.env`；通过 Compose 运行时请保留主机名 `postgres`。宿主机只开放各实例配置的服务端口，PostgreSQL 和 OAuth 回调端口均不对外映射。
 
 `postgresql.schema` 为可选项，未设置时使用连接的默认 schema。首次启动时会自动创建 `config_store`、`auth_store` 和 `usage_statistics` 三张表，并向 `config_store` 写入最小系统配置。
 
